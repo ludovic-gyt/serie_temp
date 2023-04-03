@@ -15,20 +15,23 @@ list.files() #liste les elements du wd
 
 datafile <- "input/valeurs_serie.csv" #definit le fichier de donnees
 
-data <- read.csv(datafile,sep = ";") #importe un fichier .csv dans un objet de classe data.frame
+data <-
+  read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
 data <- data[nrow(data):1,]
 
 ####representation de la série####
 
 # On enlève les 4 dernière valeurs en vue de la prévision
 
-T<-length(data$Date)
-data<-data[-c((T-3), (T-2), (T-1), T),]
+T <- length(data$Date)
+data <- data[-c((T - 3), (T - 2), (T - 1), T),]
 
 # Convertir la colonne "date" en format date et création d'une série de type zoo
 
-data$Date <- seq(as.Date("1990-05-01"), as.Date("2023-01-01"), by = "1 month") # Convertir la colonne "date" en format date
-xm <- zoo(data$Valeur) # convertit le premiers element de data en serie temporelle de type "zoo"
+data$Date <-
+  seq(as.Date("1990-05-01"), as.Date("2023-01-01"), by = "1 month") # Convertir la colonne "date" en format date
+xm <-
+  zoo(data$Valeur) # convertit le premiers element de data en serie temporelle de type "zoo"
 T <- length(xm)
 
 #data$Date <- seq(as.Date("2023-01-01"), as.Date("1990-05-01"), by = "-1 month")
@@ -37,28 +40,22 @@ T <- length(xm)
 
 # représentation graphique
 
-dxm <- diff(xm,1)
-plot(cbind(xm,dxm))
+dxm <- diff(xm, 1)
+plot(cbind(xm, dxm))
 
-ggplot( data, aes(y = xm, x = Date)) +
+ggplot(data, aes(y = xm, x = Date)) +
   geom_line()
 
 #ggplot( data, aes(y = xm, x = rev(data$Date))) +
 #  geom_line()
 
-####autocorrélation####
-
-par(mfrow=c(1,2))
-acf(xm); pacf(xm)
-dev.off()
-
 ####Moyenne à 0#####
 
 y <- xm - mean(xm)
-par(mfrow=c(1,2)) 
+par(mfrow = c(1, 2))
 plot(xm)
 plot(y)
-acf(y,30);pacf(y,30) 
+
 
 #### Test d'integration ####
 
@@ -68,7 +65,7 @@ summary(lm(xm ~ data$Date))
 #Ici, la constante est significative, et la time trend également,
 #nous utiliserons donc  Test for a unit root with constant and deterministic time trend
 
-adf <- adfTest(xm, lag=0, type="ct") 
+adf <- adfTest(xm, lag = 0, type = "ct")
 adf
 
 #On rejette donc l'hypothese d'une racine unitaire avec une confiance d'au moins 95%
@@ -76,45 +73,170 @@ adf
 
 
 
-Qtests <- function(series, k, fitdf=0) {
-  pvals <- apply(matrix(1:k), 1, FUN=function(l) {
-    pval <- if (l<=fitdf) NA else Box.test(series, lag=l, type="Ljung-Box", fitdf=fitdf)$p.value
-    return(c("lag"=l,"pval"=pval))
-  })
+Qtests <- function(series, k, fitdf = 0) {
+  pvals <- apply(
+    matrix(1:k),
+    1,
+    FUN = function(l) {
+      pval <- if (l <= fitdf)
+        NA
+      else
+        Box.test(series,
+                 lag = l,
+                 type = "Ljung-Box",
+                 fitdf = fitdf)$p.value
+      return(c("lag" = l, "pval" = pval))
+    }
+  )
   return(t(pvals))
 }
 
 Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
 #Les résidus sont tous autocorrélés
 
-adfTest_valid <- function(series, kmax, adftype){
+adfTest_valid <- function(series, kmax, adftype) {
   k <- 0
   noautocorr <- 0
-  while (noautocorr==0){
-    cat(paste0("ADF with ",k," lags: residuals OK? "))
-    adf <- adfTest(series, lags=k, type=adftype)
-    pvals <- Qtests(adf@test$lm$residuals, kmax, fitdf = length(adf@test$lm$coefficients))[,2]
-    if (sum(pvals<0.05,na.rm=T)==0) {
-      noautocorr <- 1; cat("OK \n")
-    } else cat("nope \n")
-    k <- k+1
+  while (noautocorr == 0) {
+    cat(paste0("ADF with ", k, " lags: residuals OK? "))
+    adf <- adfTest(series, lags = k, type = adftype)
+    pvals <-
+      Qtests(adf@test$lm$residuals,
+             kmax,
+             fitdf = length(adf@test$lm$coefficients))[, 2]
+    if (sum(pvals < 0.05, na.rm = T) == 0) {
+      noautocorr <- 1
+      cat("OK \n")
+    } else
+      cat("nope \n")
+    k <- k + 1
   }
   return(adf)
 }
-adf <- adfTest_valid(xm,393,adftype="ct")
-adf <- adfTest(xm, lags=100, type="ct")
+adf <- adfTest_valid(xm, 393, adftype = "ct")
+adf <- adfTest(xm, lags = 100, type = "ct")
 Qtests(adf@test$lm$residuals, 194, fitdf = length(adf@test$lm$coefficients))
 #en fait tout nos résidus sont autocorrélés donc pas possible de choisir le bon
 #nombre de lag ccar au bout d'un moment on a pluss de degré de liberté
 #On va faire un test adf avec le plus de lag qu'on peut
 
-adfTest(xm, lags=30, type="ct")
+adfTest(xm, lags = 30, type = "ct")
 
 summary(lm(dxm ~ data$Date[-1]))
-#
-adf <- adfTest_valid(dxm,30,"nc")
-adfTest(dxm, lags=8, type="nc")
-#série stationnaire en différence première
+
+#On choisit un modèle sans trend ni constante d'après la régression
+adf <- adfTest_valid(dxm, 50, "nc")
+adfTest(dxm, lags = 8, type = "nc")
+#on rejette l'ypothèse de racine unitaire --> série stationnaire en différence première
+#il faut donc travailler avec dxm
+
+#Partie 2 identification
+
+par(mfrow = c(1, 2))
+acf(xm, 30)
+pacf(xm, 30)
 
 
+#en regardant l'acf je dirais que q= 18 et p=4,
+#même si + flou pour le p comme depasse le seuil
+#egalement en p=11
+# donc tester AR(4), MA(18),
+#and mixed ARMA models.
+#a noter que cette partie nous informe sur les ordres maximums vraissemblables
+pmax = 4
+qmax = 18
 
+#fonction de test des significations individuelles des coefficients
+
+signif <-
+  function(estim) {
+    coef <- estim$coef
+    se <- sqrt(diag(estim$var.coef))
+    t <- coef / se
+    pval <- (1 - pnorm(abs(t))) * 2
+    return(rbind(coef, se, pval))
+  }
+
+## fonction pour estimer un arima et en verifier l'ajustement et la validite
+
+modelchoice <- function(p, q, data = xm, k = 24) {
+  estim <-
+    try(arima(data, c(p, 0, q), optim.control = list(maxit = 20000)))
+  if (class(estim) == "try-error")
+    return(c(
+      "p" = p,
+      "q" = q,
+      "arsignif" = NA,
+      "masignif" = NA,
+      "resnocorr" = NA,
+      "ok" = NA
+    ))
+  arsignif <- if (p == 0)
+    NA
+  else
+    signif(estim)[3, p] <= 0.05
+  masignif <- if (q == 0)
+    NA
+  else
+    signif(estim)[3, p + q] <= 0.05
+  resnocorr <-
+    sum(Qtests(estim$residuals, 393, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
+          T) == 0
+  checks <- c(arsignif, masignif, resnocorr)
+  ok <-
+    as.numeric(sum(checks, na.rm = T) == (3 - sum(is.na(checks))))
+  return(
+    c(
+      "p" = p,
+      "q" = q,
+      "arsignif" = arsignif,
+      "masignif" = masignif,
+      "resnocorr" = resnocorr,
+      "ok" = ok
+    )
+  )
+}
+
+## fonction pour estimer et verifier tous les arima(p,q) avec p<=pmax et q<=max
+armamodelchoice <- function(pmax, qmax) {
+  pqs <- expand.grid(0:pmax, 0:qmax)
+  t(apply(matrix(1:dim(pqs)[1]), 1, function(row) {
+    p <- pqs[row, 1]
+    q <- pqs[row, 2]
+    cat(paste0("Computing ARMA(", p, ",", q, ") \n"))
+    modelchoice(p, q)
+  }))
+}
+
+armamodels <-
+  armamodelchoice(pmax, qmax) #estime tous les arima (patienter...)
+#Maintenant, je conserve que les modeles bien ajustes et valides
+selec <-
+  armamodels[armamodels[, "ok"] == 1 &
+               !is.na(armamodels[, "ok"]),] #modeles bien ajustes et valides
+selec
+### On a 5 modeles bien ajustes et valides
+# ok veut dire que les 3 autres conditions sont valides
+#resnocorr test pour voir si les residus sont correles. residus d'arima du coup. test du portemanteau. Because each e_t is a function of the observations, it is not an iid sequence
+#? chaque ?tape, la statistique Q est croissante car on inclue le carr? d'une autocorrelation function pour un nouveau lag
+#le quantile khi deux auquel on le compare croit ?galement car le ddl augmente
+#afin d'?tre VALIDE, notre mod?le ne doit jamais rejeter l'hypith?se nulle de coef iid
+#? chaque ?tape, ? chaque fois que l'on ajoute une nouvelle autocorr?lation, jusqu'au seuil fix?
+#si les r?sidus ?taient trop corr?l?s, le mod?le ne serait pas valide, il n'expliquerait pas bien la d?pendant temporelle de nos donn?es
+# test sur les param?tres :  le code v?rifie si le test de Student pour chaque coefficient AR(i) est significatif ? un niveau de 5%. Si c'est le cas, il attribue la valeur 1 ? la variable arsignif correspondant ? ce coefficient, sinon il attribue la valeur 0.
+#Si p=0 (pas de coefficients AR), alors la variable arsignif prend la valeur NA. pareil pour chaque coef MA(i). Si on passe ce test, notre mod?le est bien ajust?.
+
+
+pqs <-
+  apply(selec, 1, function(row)
+    list("p" = as.numeric(row[1]), "q" = as.numeric(row[2]))) #cree une liste des ordres p et q des modeles candidats
+names(pqs) <-
+  paste0("arma(", selec[, 1], ",", selec[, 2], ")") #renomme les elements de la liste
+models <-
+  lapply(pqs, function(pq)
+    arima(xm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
+vapply(models, FUN.VALUE = numeric(2), function(m)
+  c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modeles candidats
+### L'ARMA(?,?) minimise les criteres d'information.
+#distance entre le true et l'estimated model car prends en compte une somme des carr? des termes d'erreur+ terme de p?nalisation pour le nombre d'ordre
+#BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les mod?les complexe, alors que BIC p?nalise +
