@@ -2,7 +2,7 @@ library(haven)
 library("zoo")
 library("tseries")
 library("ggplot2")
-library(fUnitRoots)
+library("fUnitRoots")
 setwd("C:/Users/louis/OneDrive/Documents/Cours/Git/serie_temp/input")
 data <- read.csv("valeurs_serie.csv", sep=";")
 T<-length(data$Date)
@@ -97,3 +97,13 @@ selec
 #si les résidus étaient trop corrélés, le modèle ne serait pas valide, il n'expliquerait pas bien la dépendant temporelle de nos données
 # test sur les paramètres :  le code vérifie si le test de Student pour chaque coefficient AR(i) est significatif à un niveau de 5%. Si c'est le cas, il attribue la valeur 1 à la variable arsignif correspondant à ce coefficient, sinon il attribue la valeur 0.
 #Si p=0 (pas de coefficients AR), alors la variable arsignif prend la valeur NA. pareil pour chaque coef MA(i). Si on passe ce test, notre modèle est bien ajusté.
+
+
+pqs <- apply(selec,1,function(row) list("p"=as.numeric(row[1]),"q"=as.numeric(row[2]))) #cree une liste des ordres p et q des modeles candidats
+names(pqs) <- paste0("arma(",selec[,1],",",selec[,2],")") #renomme les elements de la liste
+models <- lapply(pqs, function(pq) arima(xm,c(pq[["p"]],0,pq[["q"]]))) #cree une liste des modeles candidats estimes
+vapply(models, FUN.VALUE=numeric(2), function(m) c("AIC"=AIC(m),"BIC"=BIC(m))) #calcule les AIC et BIC des modeles candidats
+### L'ARMA(?,?) minimise les criteres d'information.
+#distance entre le true et l'estimated model car prends en compte une somme des carré des termes d'erreur+ terme de pénalisation pour le nombre d'ordre 
+#BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les modèles complexe, alors que BIC pénalise +
+
