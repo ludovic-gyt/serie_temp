@@ -89,5 +89,11 @@ selec <- armamodels[armamodels[,"ok"]==1&!is.na(armamodels[,"ok"]),] #modeles bi
 selec
 ### On a 5 modeles bien ajustes et valides
 # ok veut dire que les 3 autres conditions sont valides
-#resnocorr test pour voir si les résidus sont corrélés. résidus d'arima du coup. test du portemanteau. pour chaque autocorrelation d'ordre h, je dois avoir 
-#une valeur assez faiblz pou ne pas rejeter l'hypothèse de résidus iid.
+#resnocorr test pour voir si les résidus sont corrélés. résidus d'arima du coup. test du portemanteau. Because each e_t is a function of the observations, it is not an iid sequence
+#à chaque étape, la statistique Q est croissante car on inclue le carré d'une autocorrelation function pour un nouveau lag
+#le quantile khi deux auquel on le compare croit également car le ddl augmente
+#afin d'être VALIDE, notre modèle ne doit jamais rejeter l'hypithèse nulle de coef iid 
+#à chaque étape, à chaque fois que l'on ajoute une nouvelle autocorrélation, jusqu'au seuil fixé
+#si les résidus étaient trop corrélés, le modèle ne serait pas valide, il n'expliquerait pas bien la dépendant temporelle de nos données
+# test sur les paramètres :  le code vérifie si le test de Student pour chaque coefficient AR(i) est significatif à un niveau de 5%. Si c'est le cas, il attribue la valeur 1 à la variable arsignif correspondant à ce coefficient, sinon il attribue la valeur 0.
+#Si p=0 (pas de coefficients AR), alors la variable arsignif prend la valeur NA. pareil pour chaque coef MA(i). Si on passe ce test, notre modèle est bien ajusté.
