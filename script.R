@@ -3,6 +3,8 @@ library(zoo) #format de serie temporelle pratique et facile d'utilisation (mais 
 library(tseries) #diverses fonctions sur les series temporelles
 library(ggplot2)
 library(fUnitRoots)
+library(forecast)
+library(plyr)
 
 
 ####set-up####
@@ -22,26 +24,23 @@ data <-
 
 data <- data[nrow(data):1,] #inverse les données
 data <- data.frame(data, row.names = NULL) #réinitialise l'index
+data$Date <-
+  seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month") #Convertir la colonne "date" en format date
+data.source<-data # on stock les données sources avant d'enlever les 4 dernieres valeurs
 
 ####representation de la série####
 
 # On enlève les 4 dernière valeurs en vue de la prévision
 
 T <- length(data$Date)
-data <- data[-c((T - 3), (T - 2), (T - 1), T),]
+data <- data[-c((T - 1), T),]
 
-# Convertir la colonne "date" en format date et création d'une série de type zoo
+# Création d'une série de type zoo
 
-# Convertir la colonne "date" en format date
-data$Date <-
-  seq(as.Date("1990-01-01"), as.Date("2022-10-01"), by = "1 month") 
+xm.source<-
+  zoo(data.source$value)
 xm <-
   zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
-
-#T <- length(xm)
-
-#data$Date <- seq(as.Date("2023-01-01"), as.Date("1990-05-01"), by = "-1 month")
-#xm <- zoo(data$Valeur, order.by=data$Date)
 
 
 # représentation graphique
@@ -149,21 +148,40 @@ adf
 
 #il faut donc travailler avec dxm
 
+
 #Partie 2 identification
 
 par(mfrow = c(1, 2))
-acf(xm, 30)
-pacf(xm, 30)
+acf(dxm, 30)
+pacf(dxm, 30)
 
 
-#en regardant l'acf je dirais que q= 18 et p=4,
-#même si + flou pour le p comme depasse le seuil
-#egalement en p=11
-# donc tester AR(4), MA(18),
+#acf-> q, pacf -> p : q=3,  p=9,
+# donc tester AR(6), MA(3),
 #and mixed ARMA models.
 #a noter que cette partie nous informe sur les ordres maximums vraissemblables
-pmax = 4
-qmax = 18
+pmax = 9
+qmax = 3
+
+#annexe : méthode TD5 AIC/BIC
+
+mat <- matrix(NA,nrow=pmax+1,ncol=qmax+1) #matrice vide `a remplir
+rownames(mat) <- paste0("p=",0:pmax) #renomme les lignes
+colnames(mat) <- paste0("q=",0:qmax) #renomme les colonnes
+AICs <- mat #matrice des AIC non remplie
+BICs <- mat #matrice des BIC non remplie
+pqs <- expand.grid(0:pmax,0:qmax) #toutes les combinaisons possibles de p et q
+for (row in 1:dim(pqs)[1]){ #boucle pour chaque (p,q)
+  p <- pqs[row,1] #r ́ecup`ere p
+  q <- pqs[row,2] #r ́ecup`ere q
+  estim <- try(arima(xm,c(p,1,q),include.mean = F)) #tente d’estimer l’ARIMA 
+  AICs[p+1,q+1] <- if (class(estim)=="try-error") NA else estim$aic #assigne l’AIC 
+  BICs[p+1,q+1] <- if (class(estim)=="try-error") NA else BIC(estim) #assigne le BIC
+}
+AICs
+AICs==min(AICs)
+BICs
+BICs==min(BICs)
 
 #fonction de test des significations individuelles des coefficients
 
@@ -178,7 +196,7 @@ signif <-
 
 ## fonction pour estimer un arima et en verifier l'ajustement et la validite
 
-modelchoice <- function(p, q, data = xm, k = 24) {
+modelchoice <- function(p, q, data = dxm, k = 24) {
   estim <-
     try(arima(data, c(p, 0, q), optim.control = list(maxit = 20000)))
   if (class(estim) == "try-error")
@@ -199,7 +217,7 @@ modelchoice <- function(p, q, data = xm, k = 24) {
   else
     signif(estim)[3, p + q] <= 0.05
   resnocorr <-
-    sum(Qtests(estim$residuals, 393, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
+    sum(Qtests(estim$residuals, 30, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
           T) == 0
   checks <- c(arsignif, masignif, resnocorr)
   ok <-
@@ -216,7 +234,9 @@ modelchoice <- function(p, q, data = xm, k = 24) {
   )
 }
 
+
 ## fonction pour estimer et verifier tous les arima(p,q) avec p<=pmax et q<=max
+
 armamodelchoice <- function(pmax, qmax) {
   pqs <- expand.grid(0:pmax, 0:qmax)
   t(apply(matrix(1:dim(pqs)[1]), 1, function(row) {
@@ -227,14 +247,13 @@ armamodelchoice <- function(pmax, qmax) {
   }))
 }
 
-armamodels <-
-  armamodelchoice(pmax, qmax) #estime tous les arima (patienter...)
+armamodels <- armamodelchoice(pmax, qmax) #estime tous les arima (patienter...)
 #Maintenant, je conserve que les modeles bien ajustes et valides
 selec <-
   armamodels[armamodels[, "ok"] == 1 &
                !is.na(armamodels[, "ok"]),] #modeles bien ajustes et valides
 selec
-### On a 5 modeles bien ajustes et valides
+### On a 4 modeles bien ajustes et valides
 # ok veut dire que les 3 autres conditions sont valides
 #resnocorr test pour voir si les residus sont correles. residus d'arima du coup. test du portemanteau. Because each e_t is a function of the observations, it is not an iid sequence
 #? chaque ?tape, la statistique Q est croissante car on inclue le carr? d'une autocorrelation function pour un nouveau lag
@@ -253,9 +272,65 @@ names(pqs) <-
   paste0("arma(", selec[, 1], ",", selec[, 2], ")") #renomme les elements de la liste
 models <-
   lapply(pqs, function(pq)
-    arima(xm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
+    arima(dxm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
 vapply(models, FUN.VALUE = numeric(2), function(m)
   c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modeles candidats
-### L'ARMA(?,?) minimise les criteres d'information.
+###
 #distance entre le true et l'estimated model car prends en compte une somme des carr? des termes d'erreur+ terme de p?nalisation pour le nombre d'ordre
 #BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les mod?les complexe, alors que BIC p?nalise +
+
+#  L'ARMA(5,3) minimise l'AIC
+# L'ARMA(2,1) minimise le BIC
+
+
+#r?cup?rer les mod?les arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
+arma53<- arima(xm,c(5,1,3),include.mean=F) 
+arma21<- arima(xm,c(2,1,1),include.mean=F)
+adj_r2 <- function(model){ 
+  p <- model$arma[1]
+  q <- model$arma[2]
+  ss_res <- sum(model$residuals^2)
+  ss_tot <- sum(dxm[-c(1:max(p,q))]^2)
+  n <- model$nobs-max(p,q)
+  adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1))
+  return(adj_r2)
+}
+adj_r2(arma53)
+adj_r2(arma21)
+#je garde l'ARMA(5,3)
+#a le R2 ajust?e le plus important, il donne donc la meilleure pr?evision dans l'?echantillon. On le garde comme meilleur mod`ele au final.
+
+dev.off()
+plot(arma53$residuals)
+acf(arma53$residuals)
+pacf(arma53$residuals)
+
+hist(arma53$residuals,breaks = 50)
+checkresiduals(arma53) #une valeur abbérante pourrait être prise en compte dans la régression avec une indicatrice
+
+#causalité
+roots <- polyroot(sort(arma53$coef[c('ar1', 'ar2', 'ar3', 'ar4', 'ar5')]))
+modulus_roots <- Mod(roots)
+modulus_roots #les coefficients sont bien plus grands que 1 donc le modèle est causal
+
+#prévision
+model_pred <- predict(arma53, n.ahead=2)
+serie_pred <- zoo(c(xm, model_pred$pred))
+
+#graphiques
+xm_all <- xm.source[1:T]
+xm_all <- diff(xm_all, lag = 1)
+
+
+plot(xm_all, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série')
+lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
+U = model_pred$pred + 1.96*model_pred$se
+L = model_pred$pred - 1.96*model_pred$se
+xx = c(time (U), rev (time (U)))
+yy = c(L, rev(U))
+polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2))
+lines(model_pred$pred, type = "p", col = "red")
+lines(model_pred$pred, type = 'l', col = 'red')
+legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
+
+
