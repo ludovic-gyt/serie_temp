@@ -3,7 +3,8 @@ library(zoo) #format de serie temporelle pratique et facile d'utilisation (mais 
 library(tseries) #diverses fonctions sur les series temporelles
 library(ggplot2)
 library(fUnitRoots)
-
+library(forecast)
+library(plyr)
 
 ####set-up####
 #path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
@@ -17,8 +18,7 @@ list.files() #liste les elements du wd
 # data link : https://www.insee.fr/fr/statistiques/serie/010537309#Telechargement
 datafile <- "input/beer.csv" #definit le fichier de donnees
 
-data <-
-  read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
+data <- read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
 
 
 data <- data[nrow(data):1,] #inverse les donnÃ©es
@@ -26,18 +26,14 @@ data <- data.frame(data, row.names = NULL) #rÃ©initialise l'index
 
 ####representation de la série####
 
-# On enlÃ¨ve les 4 derniÃ¨re valeurs en vue de la prÃ©vision
+# On enlÃ¨ve les 4 dernière valeurs en vue de la prÃ©vision
 names(data)[names(data) == "ï..Date"] <- "Date"
+data$Date <-seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month")
 T <- length(data$Date)
+data.source<-data
 data <- data[-c((T - 3), (T - 2), (T - 1), T),]
 
-# Convertir la colonne "date" en format date et crétion d'une série de type zoo
-
-# Convertir la colonne "date" en format date
-data$Date <-
-  seq(as.Date("1990-01-01"), as.Date("2022-10-01"), by = "1 month") 
-xm <-
-  zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
+xm <- zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
 
 #T <- length(xm)
 
@@ -260,5 +256,9 @@ adj_r2(arma21)
 #je garde l'ARMA(5,3)
 #a le R2 ajust´e le plus important, il donne donc la meilleure pr´evision dans l'´echantillon. On le garde comme meilleur mod`ele au final.
 
-
-
+arima_pred <- as.zoo(predict(arma53, n.ahead = 4)$pred)
+xm_pred <- as.zoo(merge(xm, arima_pred))
+xm_true <- zoo(data.source$value)
+ggplot(data.source, aes(y=c(xm_pred, xm_true), x = Date)) +
+  geom_line()+
+  geom_line()
