@@ -256,9 +256,11 @@ adj_r2(arma21)
 #je garde l'ARMA(5,3)
 #a le R2 ajust´e le plus important, il donne donc la meilleure pr´evision dans l'´echantillon. On le garde comme meilleur mod`ele au final.
 
-arima_pred <- as.zoo(predict(arma53, n.ahead = 4)$pred)
-xm_pred <- as.zoo(merge(xm, arima_pred))
-xm_true <- zoo(data.source$value)
-ggplot(data.source, aes(y=c(xm_pred, xm_true), x = Date)) +
-  geom_line()+
-  geom_line()
+arima_pred<-data.frame(Date = seq( as.Date("1990-01-01"),as.Date("2022-10-01"), by= "1 month"))
+arima_pred$arima_pred<-rep(NA, nrow(arima_pred))
+arima_pred_new <- data.frame(Date = seq(as.Date("2022-11-01"),as.Date("2023-02-01"), by = "1 month"),
+                             arima_pred = predict(arma53, n.ahead = 4)$pred)
+arima_pred <- rbind(arima_pred, arima_pred_new)
+
+ggplot(arima_pred, aes( x = Date)) +
+  geom_line(aes(y=arima_pred), color="blue")
