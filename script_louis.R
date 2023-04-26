@@ -6,7 +6,8 @@ library(fUnitRoots)
 
 
 ####set-up####
-path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
+#path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
+path <- "C:/Users/louis/OneDrive/Documents/Cours/Git/serie_temp"
 setwd(path) #definit l'espace de travail (working directory ou "wd")
 getwd() #affiche le wd
 list.files() #liste les elements du wd
@@ -23,14 +24,14 @@ data <-
 data <- data[nrow(data):1,] #inverse les donnÃ©es
 data <- data.frame(data, row.names = NULL) #rÃ©initialise l'index
 
-####representation de la sÃ©rie####
+####representation de la série####
 
 # On enlÃ¨ve les 4 derniÃ¨re valeurs en vue de la prÃ©vision
-
+names(data)[names(data) == "ï..Date"] <- "Date"
 T <- length(data$Date)
 data <- data[-c((T - 3), (T - 2), (T - 1), T),]
 
-# Convertir la colonne "date" en format date et crÃ©ation d'une sÃ©rie de type zoo
+# Convertir la colonne "date" en format date et crétion d'une série de type zoo
 
 # Convertir la colonne "date" en format date
 data$Date <-
@@ -60,20 +61,20 @@ ggplot(newData, aes(y = dxm, x = Date)) +
 
 summary(lm(xm ~ data$Date))
 
-#Cette regression lineaire nous permet de determiner quel type d'Ã©quation parmis les 3 possibless utiliser dans le test Dickey-Fuller 
-#Dans cette rÃ©gression de la sÃ©rie ssur le temps, la constante et le coefficient sont significatifs
-#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante et tendance temporelle dÃ©terministe
+#Cette regression lineaire nous permet de determiner quel type d'équation parmis les 3 possibles utiliser dans le test Dickey-Fuller 
+#Dans cette régression de la série sur le temps, la constante signif et le coefficient non significatifs
+#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante et sans tendance temporelle déterministe
 
 adf <- adfTest(xm, lag = 0, type = "c")
 adf
 
 #On accepte donc l'hypothese d'une racine unitaire. La sÃ©rie semble donc inclure une tendance comme le prÃ©sageait les graphiques
-#Cependant ce test est biaisÃ© si
-#les rÃ©sidus de la spÃ©cification du test ADF sont autocorrÃ©lÃ©s.
+#Cependant ce test est biaisé si
+#les résidus de la spécification du test ADF sont autocorrélés.
 #On ajoute donc des lag dans la specification du test ADF
-#pour controler l'effet du passe sur la relation entre X_t et X_t_-_1 (et X_t (rÃ©crire la spÃ©cification complÃ¨te choisie dans le latex)
-#Pour choisir le nombre de lag a incorporer dans la sspÃ©ccification testÃ© dans le test ADF
-#On utilise la fonction Qtests (reprÃ©ciser son fonctionnement avecc chat gpt)
+#pour controler l'effet du passe sur la relation entre X_t et X_t_-_1 (et X_t (récrire la spÃ©cification complÃ¨te choisie dans le latex)
+#Pour choisir le nombre de lag a incorporer dans la spécification testé dans le test ADF
+#On utilise la fonction Qtests (repréciser son fonctionnement avecc chat gpt)
 
 Qtests <- function(series, k, fitdf = 0) {
   pvals <- apply(
@@ -95,8 +96,6 @@ Qtests <- function(series, k, fitdf = 0) {
 
 Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
 
-adf <- adfTest(xm, lag = 9, type = "c")
-Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
 #les rÃ©sidus sont tous autocorrÃ©lÃ©s
 
 adfTest_valid <- function(series, kmax, adftype) {
@@ -121,11 +120,9 @@ adfTest_valid <- function(series, kmax, adftype) {
 
 adf <- adfTest_valid(xm, 100, adftype = "c")
 
-#en fait tout nos rÃ©sidus sont autocorrÃ©lÃ©s donc pas possible de choisir le bon
-#nombre de lag ccar au bout d'un moment on a pluss de degrÃ© de libertÃ©
+#en fait tout nos résidus sont autocorrélés donc pas possible de choisir le bon
+#nombre de lag car au bout d'un moment on a pluss de degré de liberté
 #On va faire un test adf avec le plus de lag qu'on peut
-
-adfTest(xm, lags = 30, type = "ct")
 
 summary(lm(dxm ~ data$Date[-1]))
 
@@ -138,18 +135,16 @@ adfTest(dxm, lags = 8, type = "nc")
 #Partie 2 identification
 
 par(mfrow = c(1, 2))
-acf(xm, 30)
-pacf(xm, 30)
+acf(dxm, 30)
+pacf(dxm, 30)
 
 
-#en regardant l'acf je dirais que q= 18 et p=4,
-#mÃªme si + flou pour le p comme depasse le seuil
-#egalement en p=11
-# donc tester AR(4), MA(18),
+#acf-> q, pacf -> p : q=3,  p=9,
+# donc tester AR(6), MA(3),
 #and mixed ARMA models.
 #a noter que cette partie nous informe sur les ordres maximums vraissemblables
-pmax = 4
-qmax = 18
+pmax = 9
+qmax = 3
 
 #fonction de test des significations individuelles des coefficients
 
@@ -164,7 +159,7 @@ signif <-
 
 ## fonction pour estimer un arima et en verifier l'ajustement et la validite
 
-modelchoice <- function(p, q, data = xm, k = 24) {
+modelchoice <- function(p, q, data = dxm, k = 24) {
   estim <-
     try(arima(data, c(p, 0, q), optim.control = list(maxit = 20000)))
   if (class(estim) == "try-error")
@@ -213,14 +208,13 @@ armamodelchoice <- function(pmax, qmax) {
   }))
 }
 
-armamodels <-
-  armamodelchoice(pmax, qmax) #estime tous les arima (patienter...)
+armamodels <- armamodelchoice(pmax, qmax) #estime tous les arima (patienter...)
 #Maintenant, je conserve que les modeles bien ajustes et valides
 selec <-
   armamodels[armamodels[, "ok"] == 1 &
                !is.na(armamodels[, "ok"]),] #modeles bien ajustes et valides
 selec
-### On a 5 modeles bien ajustes et valides
+### On a 4 modeles bien ajustes et valides
 # ok veut dire que les 3 autres conditions sont valides
 #resnocorr test pour voir si les residus sont correles. residus d'arima du coup. test du portemanteau. Because each e_t is a function of the observations, it is not an iid sequence
 #? chaque ?tape, la statistique Q est croissante car on inclue le carr? d'une autocorrelation function pour un nouveau lag
@@ -239,9 +233,32 @@ names(pqs) <-
   paste0("arma(", selec[, 1], ",", selec[, 2], ")") #renomme les elements de la liste
 models <-
   lapply(pqs, function(pq)
-    arima(xm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
+    arima(dxm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
 vapply(models, FUN.VALUE = numeric(2), function(m)
   c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modeles candidats
-### L'ARMA(?,?) minimise les criteres d'information.
+###
 #distance entre le true et l'estimated model car prends en compte une somme des carr? des termes d'erreur+ terme de p?nalisation pour le nombre d'ordre
 #BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les mod?les complexe, alors que BIC p?nalise +
+
+#  L'ARMA(5,3) minimise l'AIC
+# L'ARMA(2,1) minimise le BIC
+
+#récupérer les modèles arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
+arma53<- arima(xm,c(5,1,3),include.mean=F) 
+arma21<- arima(xm,c(2,1,1),include.mean=F)
+adj_r2 <- function(model){ 
+  p <- model$arma[1]
+  q <- model$arma[2]
+  ss_res <- sum(model$residuals^2)
+  ss_tot <- sum(dxm[-c(1:max(p,q))]^2)
+  n <- model$nobs-max(p,q)
+  adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1))
+  return(adj_r2)
+}
+adj_r2(arma53)
+adj_r2(arma21)
+#je garde l'ARMA(5,3)
+#a le R2 ajust´e le plus important, il donne donc la meilleure pr´evision dans l'´echantillon. On le garde comme meilleur mod`ele au final.
+
+
+
