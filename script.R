@@ -61,13 +61,13 @@ ggplot(newData, aes(y = dxm, x = Date)) +
 summary(lm(xm ~ data$Date))
 
 #Cette regression lineaire nous permet de determiner quel type d'équation parmis les 3 possibless utiliser dans le test Dickey-Fuller 
-#Dans cette régression de la série ssur le temps, la constante et le coefficient sont significatifs
-#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante et tendance temporelle déterministe
+#Dans cette régression de la série sur le temps, seulement la constante significative
+#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante 
 
 adf <- adfTest(xm, lag = 0, type = "c")
 adf
 
-#On accepte donc l'hypothese d'une racine unitaire. La série semble donc inclure une tendance comme le présageait les graphiques
+#On rejecte donc l'hypothese d'une racine unitaire. La série semble donc être stationnaire
 #Cependant ce test est biaisé si
 #les résidus de la spécification du test ADF sont autocorrélés.
 #On ajoute donc des lag dans la specification du test ADF
@@ -95,9 +95,14 @@ Qtests <- function(series, k, fitdf = 0) {
 
 Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
 
-adf <- adfTest(xm, lag = 9, type = "c")
-Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
-#les résidus sont tous autocorrélés
+#en sa basant sur les résultats de la régressions dans le test ADF précédemment exécuté, nous
+# concluons à partir de Qtests que tout les résidus sont autocorrélés. Il faut itérer ce test en 
+#changeant le nombre de lag dans le test ADF. Pour trouver le nombre de lag optimal à inclure dans le
+#test ADF, il suffit d'arrêter l'itération quand tout les p valeurs de Qtests sont supérieur à 0.05. Cela
+#signifie en effet qu'aucun résidus n'est corrélé dans la régression car il y a assez de lag dans
+#spécification pour prendre en compte l'effet du passé sur le présent. adfTest s'arrête donc quand
+#le nombre de lag permet de ne plus avoir d'autoccorrélation des résidus.
+
 
 adfTest_valid <- function(series, kmax, adftype) {
   k <- 0
@@ -121,18 +126,27 @@ adfTest_valid <- function(series, kmax, adftype) {
 
 adf <- adfTest_valid(xm, 100, adftype = "c")
 
-#en fait tout nos résidus sont autocorrélés donc pas possible de choisir le bon
-#nombre de lag ccar au bout d'un moment on a pluss de degré de liberté
-#On va faire un test adf avec le plus de lag qu'on peut
+#9 lag dans la spécification du test ADF permettent de ne plus avoir de problème d'autocorrélation des résidus.
+#On peut donc analyser la p value du tesst ADF avec 9 lag et une constante pour conclure
+#a la stationarité ou non des résidus
+#adfTest_valid a en fait enregistré le dernier test, celui avec le nombre de lag optimal:
 
-adfTest(xm, lags = 30, type = "ct")
+adf
+
+#On accepte l'hypothèse de non stationarité, on doit donc différentier la série
+#(on enlève la première date car en différenciant la série on a perdu une date) : 
 
 summary(lm(dxm ~ data$Date[-1]))
 
-#On choisit un modèle sans trend ni constante d'après la régression
+#On réitère les étapes précédentes afin d'étudier la stationarité de la série différenciée
+
+#Ni la constante ou la tendance temporelle ne sont significatifs avec la série différenciée
+
+#On choisit donc un modèle sans trend ni constante dans notre test ADF:
 adf <- adfTest_valid(dxm, 50, "nc")
-adfTest(dxm, lags = 8, type = "nc")
-#on rejette l'ypothèse de racine unitaire --> série stationnaire en différence première
+adf
+#On rejette l'ypothèse de racine unitaire, la série est donc bien stationnaire en différence première
+
 #il faut donc travailler avec dxm
 
 #Partie 2 identification
