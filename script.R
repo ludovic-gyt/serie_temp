@@ -13,11 +13,15 @@ list.files() #liste les elements du wd
 
 ####import####
 
-datafile <- "input/valeurs_serie.csv" #definit le fichier de donnees
+# data link : https://www.insee.fr/fr/statistiques/serie/010537309#Telechargement
+datafile <- "input/beer.csv" #definit le fichier de donnees
 
 data <-
   read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
-data <- data[nrow(data):1,]
+
+
+data <- data[nrow(data):1,] #inverse les données
+data <- data.frame(data, row.names = NULL) #réinitialise l'index
 
 ####representation de la série####
 
@@ -28,11 +32,13 @@ data <- data[-c((T - 3), (T - 2), (T - 1), T),]
 
 # Convertir la colonne "date" en format date et création d'une série de type zoo
 
+# Convertir la colonne "date" en format date
 data$Date <-
-  seq(as.Date("1990-05-01"), as.Date("2023-01-01"), by = "1 month") # Convertir la colonne "date" en format date
+  seq(as.Date("1990-01-01"), as.Date("2022-10-01"), by = "1 month") 
 xm <-
-  zoo(data$Valeur) # convertit le premiers element de data en serie temporelle de type "zoo"
-T <- length(xm)
+  zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
+
+#T <- length(xm)
 
 #data$Date <- seq(as.Date("2023-01-01"), as.Date("1990-05-01"), by = "-1 month")
 #xm <- zoo(data$Valeur, order.by=data$Date)
@@ -40,38 +46,34 @@ T <- length(xm)
 
 # représentation graphique
 
-dxm <- diff(xm, 1)
-plot(cbind(xm, dxm))
 
 ggplot(data, aes(y = xm, x = Date)) +
   geom_line()
-
-#ggplot( data, aes(y = xm, x = rev(data$Date))) +
-#  geom_line()
-
-####Moyenne à 0#####
-
-y <- xm - mean(xm)
-par(mfrow = c(1, 2))
-plot(xm)
-plot(y)
+dxm <- diff(xm, 1)
+newDate <- data$Date[2:length(data$Date)]
+newData <- data.frame(Date = newDate, dxm = dxm)
+ggplot(newData, aes(y = dxm, x = Date)) +
+  geom_line()
 
 
 #### Test d'integration ####
 
 summary(lm(xm ~ data$Date))
 
-#Cette regression lineaire nous permets de determiner quel type de Dickey-Fuller test nous devons utiliser
-#Ici, la constante est significative, et la time trend également,
-#nous utiliserons donc  Test for a unit root with constant and deterministic time trend
+#Cette regression lineaire nous permet de determiner quel type d'équation parmis les 3 possibless utiliser dans le test Dickey-Fuller 
+#Dans cette régression de la série ssur le temps, la constante et le coefficient sont significatifs
+#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante et tendance temporelle déterministe
 
-adf <- adfTest(xm, lag = 0, type = "ct")
+adf <- adfTest(xm, lag = 0, type = "c")
 adf
 
-#On rejette donc l'hypothese d'une racine unitaire avec une confiance d'au moins 95%
-#On ajoute des differences de lag pour controler l'effet du passe sur la relation entre X_t_-_1 et X_t
-
-
+#On accepte donc l'hypothese d'une racine unitaire. La série semble donc inclure une tendance comme le présageait les graphiques
+#Cependant ce test est biaisé si
+#les résidus de la spécification du test ADF sont autocorrélés.
+#On ajoute donc des lag dans la specification du test ADF
+#pour controler l'effet du passe sur la relation entre X_t et X_t_-_1 (et X_t (récrire la spécification complète choisie dans le latex)
+#Pour choisir le nombre de lag a incorporer dans la sspéccification testé dans le test ADF
+#On utilise la fonction Qtests (repréciser son fonctionnement avecc chat gpt)
 
 Qtests <- function(series, k, fitdf = 0) {
   pvals <- apply(
@@ -92,7 +94,10 @@ Qtests <- function(series, k, fitdf = 0) {
 }
 
 Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
-#Les résidus sont tous autocorrélés
+
+adf <- adfTest(xm, lag = 9, type = "c")
+Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
+#les résidus sont tous autocorrélés
 
 adfTest_valid <- function(series, kmax, adftype) {
   k <- 0
@@ -113,9 +118,9 @@ adfTest_valid <- function(series, kmax, adftype) {
   }
   return(adf)
 }
-adf <- adfTest_valid(xm, 393, adftype = "ct")
-adf <- adfTest(xm, lags = 100, type = "ct")
-Qtests(adf@test$lm$residuals, 194, fitdf = length(adf@test$lm$coefficients))
+
+adf <- adfTest_valid(xm, 100, adftype = "c")
+
 #en fait tout nos résidus sont autocorrélés donc pas possible de choisir le bon
 #nombre de lag ccar au bout d'un moment on a pluss de degré de liberté
 #On va faire un test adf avec le plus de lag qu'on peut
