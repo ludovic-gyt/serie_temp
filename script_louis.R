@@ -8,7 +8,8 @@ library(plyr)
 
 
 ####set-up####
-path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
+#path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
+path <- "C:/Users/louis/OneDrive/Documents/Cours/Git/serie_temp"
 setwd(path) #definit l'espace de travail (working directory ou "wd")
 getwd() #affiche le wd
 list.files() #liste les elements du wd
@@ -154,7 +155,7 @@ acf(dxm, 30)
 pacf(dxm,30)
 dev.off()
 
-#acf-> q, pacf -> p : q=3,  p=9,
+#acf-> q, pacf -> p : q=2,  p=9,
 # donc tester AR(6), MA(3),
 #and mixed ARMA models.
 #a noter que cette partie nous informe sur les ordres maximums vraissemblables
@@ -191,6 +192,7 @@ signif <-
     pval <- (1 - pnorm(abs(t))) * 2
     return(rbind(coef, se, pval))
   }
+
 
 ## fonction pour estimer un arima et en verifier l'ajustement et la validite
 
@@ -277,7 +279,7 @@ vapply(models, FUN.VALUE = numeric(2), function(m)
 #distance entre le true et l'estimated model car prends en compte une somme des carr? des termes d'erreur+ terme de p?nalisation pour le nombre d'ordre
 #BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les mod?les complexe, alors que BIC p?nalise +
 
-#  L'ARMA(5,3) minimise l'AIC
+#  L'ARMA(2,2) minimise l'AIC
 # L'ARMA(2,1) minimise le BIC
 
 
@@ -297,7 +299,8 @@ adj_r2(arma22)
 adj_r2(arma21)
 
 signif(arma22)
-#je garde l'ARMA(5,3)
+
+#je garde l'ARMA(2,2)
 #a le R2 ajust?e le plus important, il donne donc la meilleure pr?evision dans l'?echantillon. On le garde comme meilleur mod`ele au final.
 
 plot(arma22$residuals)
@@ -333,6 +336,24 @@ plot_pred <- function(start){
   lines(pred, type = "p", col = "red")
   lines(pred, type = 'l', col = 'red') 
   lines(link, type = 'l', col = 'red')
-  legend("topleft", legend=c("DonnÃ©es rÃ©elles", "PrÃ©diction"), col=c("red", "black"), lty=1:2, cex=0.4)
+  legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
   }
-plot_pred(2016)
+plot_pred(2020)
+signif(arma22)[1]
+
+arima_22 <- function(xm_1, xm_2, xm_3){
+  xm_arima<- xm_1+ (xm_1-xm_2)*arma22$coef[1]+ (xm_2-xm_3)* arma22$coef[2]
+  return(xm_arima)
+}
+
+xm_arima<-c(NA, NA, NA)
+for (i in 4:398) {
+  xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]))
+}
+
+xm_arima <- zoo(xm_arima, order.by = data.source$Date)http://127.0.0.1:11831/graphics/794537bf-40d8-40f9-ae10-f1f5725d60d1.png
+
+plot(xm[index(xm) >= 2010+0/12], main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)", xlab = "Années", ylab = "Séries", col = "black")
+lines(xm_arima[index(xm) >= 2010+0/12], col = "red")
+
+legend("topright", legend = expression(X[t], "ARIMA(2,1,2)"), col = c("black", "red"), lty = 1)
