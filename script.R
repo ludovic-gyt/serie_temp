@@ -40,7 +40,7 @@ data <- data[-c((T - 1), T),]
 # Création d'une série de type zoo
 
 xm.source<-
-  zoo(data.source$value, order.by = data$Date)
+  zoo(data.source$value, order.by = data.source$Date)
 xm <-
   zoo(data$value, order.by = data$Date[-c((T - 1), T)] ) # converti les premiers element de data en serie temporelle de type "zoo"
 
@@ -314,22 +314,29 @@ modulus_roots #les coefficients sont bien plus grands que 1 donc le modèle est 
 
 #prévision
 model_pred <- predict(arma22, n.ahead=2)
-serie_pred <- zoo(c(xm, model_pred$pred))
+pred <- zoo(model_pred$pred , order.by = as.yearmon(c(2023+0/12,2023+1/12)))
+
+#serie_pred <- zoo(c(xm, model_pred$pred))
+link = rbind(xm[length(xm)],pred[1])
 
 #graphiques
+dxm.source <- diff(xm.source, 1)
 
-dxm_all <- diff(xm.source, lag = 1)
+plot_pred <- function(start){
+  plot(xm.source, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série',xlim = c(start,2023+3/12))
+  #lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
+  U = model_pred$pred + 1.96*model_pred$se
+  L = model_pred$pred - 1.96*model_pred$se
+  xx = c(time (U), rev (time (U)))
+  yy = c(L, rev(U))
+  polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2))
+  lines(pred, type = "p", col = "red")
+  lines(pred, type = 'l', col = 'red') 
+  lines(link, type = 'l', col = 'red')
+  legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
+  }
+plot_pred(2016)
 
 
-plot(dxm_all, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série')
-#lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
-U = model_pred$pred + 1.96*model_pred$se
-L = model_pred$pred - 1.96*model_pred$se
-xx = c(time (U), rev (time (U)))
-yy = c(L, rev(U))
-polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2))
-lines(model_pred$pred, type = "p", col = "red")
-lines(model_pred$pred, type = 'l', col = 'red')
-legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
 
-
+     
