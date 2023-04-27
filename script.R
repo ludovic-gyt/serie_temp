@@ -180,7 +180,7 @@ for (row in 1:dim(pqs)[1]){ #boucle pour chaque (p,q)
 AICs==min(AICs) #cherche le modèle minimisant le critère AIC
 BICs==min(BICs) #cherche le modèle minimisant le critère BIC
 
-# Les modèles ARIMA(3,1,2) et ARIMA(0,1,2) minimisent respectement le AIC et le BIC.
+# Les modèles ARIMA(3,1,2) et ARIMA(0,1,2) minimisent respectivement le AIC et le BIC.
 
 # Cependant, nous allons réaliser une étude plus poussé pour déterminer le meilleur modèle. Nous
 # allons notamment déterminer la significativité des coefficient des AR et des MA, et analyser
@@ -214,11 +214,11 @@ modelchoice <- function(p, q, data = dxm, k = 24) {
   arsignif <- if (p == 0) #si p égal 0, il n'y a pas de coefficient AR donc la fonction renvoie NA
     NA
   else
-    signif(estim)[3, p] <= 0.05 #si la p-value du coefficient AR le plus laggé est inférieur à 0.05, la fonction renvoie 1 dans la colonne "arsignif"
+    signif(estim)[3, p] <= 0.05 #si la p-value du coefficient AR, avec l'ordre de retard le plus important, est inférieur à 0.05, la fonction renvoie 1 dans la colonne "arsignif"
   masignif <- if (q == 0) #si q égal 0, il n'y a pas de coefficient MA donc la fonction renvoie NA
     NA
   else
-    signif(estim)[3, p + q] <= 0.05 #si la p-value du coefficient MA le plus laggé est inférieur à 0.05, la fonction renvoie 1 dans la colonne "masignif"
+    signif(estim)[3, p + q] <= 0.05 #si la p-value du coefficient MA, avec l'ordre de retard le plus important, est inférieur à 0.05, la fonction renvoie 1 dans la colonne "masignif"
   resnocorr <-
     sum(Qtests(estim$residuals, 30, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
           T) == 0 #si les résidus ne sont pas autocorrélés, la fonction renvoie 1
@@ -238,7 +238,7 @@ modelchoice <- function(p, q, data = dxm, k = 24) {
 }
 
 
-## la fonction armamodelchoice estime et éxécute modelchoice sur tous les arima(p,q) avec p<=pmax et q<=max
+## La fonction armamodelchoice estime et éxécute modelchoice sur tous les arima(p,q) avec p<=pmax et q<=max
 
 armamodelchoice <- function(pmax, qmax) {
   pqs <- expand.grid(0:pmax, 0:qmax) #crréation de la grille de p et q
@@ -254,132 +254,122 @@ armamodels <- armamodelchoice(pmax, qmax)
 armamodels
 
 # Il s'agit de sélectionner uniquement les modèles ou la colonne "ok" est égale à 1, c'est à dire
-# où les coefficients de l'AR le plus laggé et du MA le plus laggé sont significatifs et où les 
-# résidus ne sont pas autocorrélés : 
+# où les coefficients de l'AR et du MA, avec les ordres de retard les plus important, sont significatifs
+# et où les résidus ne sont pas autocorrélés : 
 
 selec <-
   armamodels[armamodels[, "ok"] == 1 &
                !is.na(armamodels[, "ok"]),] 
 
 selec 
+
 # On retient seulement 3 modèles avec cette méthode, les modèles ARIMA(9,1,0), ARIMA(2,1,1) et ARIMA(2,1,2)
+# Les modèles ARIMA(3,1,2) et ARIMA(0,1,2), qui minimisaient respectivement le AIC et le BIC, ne sont
+# pas retenu avec cette méthode car le coefficient de l'AR le plus laggé n'est pas significatif et donc il faut passer
+# au modèle ARIMA(2,1,2), que l'on a retenu. Quant à ARIMA(0,1,2) les résidus sont autocorrélés.
 
-# Il faut maintenant choisir le meilleur de ces 3 modèles.
-
-### On a 4 modeles bien ajustes et valides
-# ok veut dire que les 3 autres conditions sont valides
-#resnocorr test pour voir si les residus sont correles. residus d'arima du coup. test du portemanteau. Because each e_t is a function of the observations, it is not an iid sequence
-#? chaque ?tape, la statistique Q est croissante car on inclue le carr? d'une autocorrelation function pour un nouveau lag
-#le quantile khi deux auquel on le compare croit ?galement car le ddl augmente
-#afin d'?tre VALIDE, notre mod?le ne doit jamais rejeter l'hypith?se nulle de coef iid
-#? chaque ?tape, ? chaque fois que l'on ajoute une nouvelle autocorr?lation, jusqu'au seuil fix?
-#si les r?sidus ?taient trop corr?l?s, le mod?le ne serait pas valide, il n'expliquerait pas bien la d?pendant temporelle de nos donn?es
-# test sur les param?tres :  le code v?rifie si le test de Student pour chaque coefficient AR(i) est significatif ? un niveau de 5%. Si c'est le cas, il attribue la valeur 1 ? la variable arsignif correspondant ? ce coefficient, sinon il attribue la valeur 0.
-#Si p=0 (pas de coefficients AR), alors la variable arsignif prend la valeur NA. pareil pour chaque coef MA(i). Si on passe ce test, notre mod?le est bien ajust?.
-
+# Il faut maintenant choisir le meilleur de ces 3 modèles. On utilise alors la méthode de minimisation des critères
+# AIC et BIC sur ces 3 modèles :
 
 pqs <-
   apply(selec, 1, function(row)
-    list("p" = as.numeric(row[1]), "q" = as.numeric(row[2]))) #cree une liste des ordres p et q des modeles candidats
+    list("p" = as.numeric(row[1]), "q" = as.numeric(row[2]))) #crée une liste des ordres p et q des modeles candidats
 names(pqs) <-
-  paste0("arma(", selec[, 1], ",", selec[, 2], ")") #renomme les elements de la liste
+  paste0("arma(", selec[, 1], ",", selec[, 2], ")") #renomme les éléments de la liste
 models <-
   lapply(pqs, function(pq)
-    arima(dxm, c(pq[["p"]], 0, pq[["q"]]))) #cree une liste des modeles candidats estimes
+    arima(dxm, c(pq[["p"]], 0, pq[["q"]]))) #crée une liste des estimations des modèles candidats
 vapply(models, FUN.VALUE = numeric(2), function(m)
-  c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modeles candidats
-###
-#distance entre le true et l'estimated model car prends en compte une somme des carr? des termes d'erreur+ terme de p?nalisation pour le nombre d'ordre
-#BIC consistent estimators of p and q. AIC meilleur asymptotiquement AR(infini). AIC often leads to over parametrisation. AIC favorise les mod?les complexe, alors que BIC p?nalise +
+  c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modèles candidats
 
-#  L'ARMA(5,3) minimise l'AIC
+# L'ARMA(2,2) minimise l'AIC
 # L'ARMA(2,1) minimise le BIC
+# Le BIC pénalise les modèles avec de grrands ordre de retards
 
 
-#r?cup?rer les mod?les arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
-arma22<- arima(xm,c(2,1,2),include.mean=F) #essayer avec T
-arma21<- arima(xm,c(2,1,1),include.mean=F)
-arma53<- arima(xm,c(5,1,3),include.mean=F)
+# On récupère maintenant l'estimation de chacun de ces 2 modèles :
+
+arima212<- arima(xm,c(2,1,2),include.mean=F) 
+arima211<- arima(xm,c(2,1,1),include.mean=F)
+
+# On définit une fonction qui calcule le R2 ajusté de chaque modèle
 adj_r2 <- function(model){ 
-  p <- model$arma[1]
-  q <- model$arma[2]
-  ss_res <- sum(model$residuals^2)
-  ss_tot <- sum(dxm[-c(1:max(p,q))]^2)
-  n <- model$nobs-max(p,q)
-  adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1))
+  p <- model$arma[1] #récupère le paramètre p du modèle
+  q <- model$arma[2] #récupère le paramètre q du modèle
+  ss_res <- sum(model$residuals^2) #somme les résidus au carré
+  ss_tot <- sum(dxm[-c(1:max(p,q))]^2) #somme les valeurs au carré de dxm en excluant le max(p,q) premières valeurs
+  n <- model$nobs-max(p,q) #calcul le nombre d'observation de la série avec les max(p,q) premières valeurs exclues
+  adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1)) #calcul le R2 ajusté
   return(adj_r2)
 }
-adj_r2(arma22)
-adj_r2(arma21)
+adj_r2(arima212) #calcule le R2 ajusté d'un arima212
+adj_r2(arima211) #calcule le R2 ajusté d'un arima211
 
-signif(arma22)
-#je garde l'ARMA(5,3)
-#a le R2 ajust?e le plus important, il donne donc la meilleure pr?evision dans l'?echantillon. On le garde comme meilleur mod`ele au final.
+# On garde le modèleavec le R2 le plus faible, c'est à dire ARIMA(2,1,2)
+# Il donne donc la meilleur prédiction
 
-plot(arma22$residuals)
-acf(arma22$residuals)
-pacf(arma22$residuals)
 
-hist(arma22$residuals,breaks = 50)
-checkresiduals(arma22) #une valeur abbérante pourrait être prise en compte dans la régression avec une indicatrice
+####ÉTUDE DU MODÈLE CHOISI####
 
-#causalité
-roots <- polyroot(sort(arma21$coef[c('ar1', 'ar2', 'ar3', 'ar4','ar5')]))
-roots <- polyroot(sort(arma22$coef[c('ar1', 'ar2')]))
-modulus_roots <- Mod(roots)
+# On peut étudier ce modèle plus en détail :
+signif(arima212)
+# Tous les coefficients sont significatifs dans ce modèle 
 
-modulus_roots #les coefficients sont bien plus grands que 1 donc le modèle est causal
+# On peut vérifier également graphiquement la qualité de nos résidus : 
 
-#prévision
-model_pred <- predict(arma22, n.ahead=2)
-pred <- zoo(model_pred$pred , order.by = as.yearmon(c(2023+0/12,2023+1/12)))
+checkresiduals(arima212) 
 
-#serie_pred <- zoo(c(xm, model_pred$pred))
-link = rbind(xm[length(xm)],pred[1])
+# Les résidus suivent une loi normale et sont bien décorrélés d'après ces graphiques
+# Une valeur abbérante est présente, on pourrait la prendre en compte dans la régression avec une indicatrice
 
-#graphiques
-dxm.source <- diff(xm.source, 1)
+# On étudie maintenant la causalité du modèle :
+
+roots <- polyroot(c(1, -arima212$coef["ar1"], -arima212$coef["ar2"])) #calcul les racines du polynome 1-0.1543469x+0.1338976x^2
+modulus_roots <- Mod(roots) #récupère les modulo des racines
+modulus_roots #les coefficients sont plus grand que 1 donc le modèle est causal
+
+####PREVISION####
+
+model_pred <- predict(arima212, n.ahead=2) #prédiction des deux valeurs après la dernière valeur de xm
+pred <- zoo(model_pred$pred , order.by = as.yearmon(c(2023+0/12,2023+1/12))) #stock ces 2 valeurs dans un objet zoo indicé par des dates
+
+# On crée une fonction qui permet de construire un graphique de la série depuis une date x
+# et des prédictions de janvier et février 2023
 
 plot_pred <- function(start){
-  plot(xm.source, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série',xlim = c(start,2023+3/12))
-  #lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
-  U = model_pred$pred + 1.96*model_pred$se
-  L = model_pred$pred - 1.96*model_pred$se
-  xx = c(time (U), rev (time (U)))
-  yy = c(L, rev(U))
-  polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2))
-  lines(pred, type = "p", col = "red")
-  lines(pred, type = 'l', col = 'red') 
-  lines(link, type = 'l', col = 'red')
-  legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
+  plot(xm.source, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série',xlim = c(start,2023+3/12)) #plot la série xm.source
+  U = model_pred$pred + 1.96*model_pred$se #calcul la borne supérieure de l'intervalle de confiance
+  L = model_pred$pred - 1.96*model_pred$se #calcul la borne inférieure de l'intervalle de confiance
+  xx = c(time (U), rev (time (U))) #stock un objet xx pour le construction de l'intervalle de confiance
+  yy = c(L, rev(U)) #stock un objet yy pour le construction de l'intervalle de confiance
+  polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2)) #ajoute l'intervalle de confiance sur le graphique
+  lines(pred, type = "p", col = "red") #ajoute des points sur les valeurs prédites
+  lines(pred, type = 'l', col = 'red') #ajoute des lignes entre les valeurs prédites
+  link = rbind(xm[length(xm)],pred[1]) #stock un vecteur avec la dernière valeur avant prédiction et la première valeur prédite
+  lines(link, type = 'l', col = 'red') # trace une ligne entre la dernière valeur avant prédiction et la première valeur prédite
+  legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4) #incorpore des légendes
   }
-plot_pred(2016)
 
+plot_pred(2016) #graphique de la série depuis 2016 et des prédictions de janvier et février 2023
 
-#graph comparaison
+# On trace également un graphique avec la série réelle et la prédiction pour chaque temporalité de 
+# la série sachant les valeurs réelles précédentes
 
-arima_22 <- function(xm_1, xm_2, xm_3) {
-  xm_arima <-
-    xm_1 + (xm_1 - xm_2) * arma22$coef[1] + (xm_2 - xm_3) * arma22$coef[2]
-  return(xm_arima)
+dev.off()
+
+arima_22 <- function(xm_1, xm_2, xm_3){
+  xm_arima <- xm_1+ (xm_1-xm_2)*arma22$coef[1]+ (xm_2-xm_3)* arma22$coef[2] #équation de l'ARIMA(2,1,2) estimé sur xm
+  return(xm_arima) #retourne la valeur prédite sachant xm_1, xm_2, xm_3
 }
-length(xm)
-xm_arima <- c(NA, NA, NA)
+
+xm_arima<-c(NA, NA, NA)
 for (i in 4:length(xm)) {
-  xm_arima[i] <-
-    arima_22(as.numeric(xm[i - 1]), as.numeric(xm[i - 2]), as.numeric(xm[i - 3]))
-}
+  xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]))
+} #calcul la prédiction sachant les valeurs passées par itération
 
-xm_arima <- zoo(xm_arima, order.by = data.source$Date)
-
-plot(
-  xm[index(xm) >= 2010 + 0 / 12],
-  main = "Comparaison de la s?rie et des pr?dictions de l'ARIMA(2,1,2)",
-  xlab = "Ann?es",
-  ylab = "S?ries",
-  col = "black"
-)
-lines(xm_arima[index(xm) >= 2010 + 0 / 12], col = "red")
+xm_arima <- zoo(xm_arima, order.by = data.source$Date) #transformation de xm_arima en objet zoo
+plot(xm[index(xm) >= 2010+0/12], main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)", xlab = "Années", ylab = "Séries", col = "black") #construction du graphique
+lines(xm_arima[index(xm) >= 2010+0/12], col = "red") #ajout de la série prédite en rouge 
 
 legend(
   "topright",
@@ -387,7 +377,9 @@ legend(
   col = c("black", "red"),
   lty = 1,
   cex = 0.4
-)
+) #ajout de la légende
+
+# fonction julien à tester 
 
 model <- Arima(prod,c(5,1,0))
 plot(model)
