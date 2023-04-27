@@ -311,7 +311,7 @@ hist(arma22$residuals,breaks = 50)
 checkresiduals(arma22) #une valeur abbÃ©rante pourrait Ãªtre prise en compte dans la rÃ©gression avec une indicatrice
 
 #causalitÃ©
-roots <- polyroot(sort(arma22$coef[c('ar1', 'ar2')]))
+roots <- polyroot(c(1, -arma22$coef["ar1"], -arma22$coef["ar2"]))
 modulus_roots <- Mod(roots)
 modulus_roots #les coefficients sont bien plus grands que 1 donc le modÃ¨le est causal
 
@@ -351,8 +351,7 @@ for (i in 4:398) {
   xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]))
 }
 
-xm_arima <- zoo(xm_arima, order.by = data.source$Date)http://127.0.0.1:11831/graphics/794537bf-40d8-40f9-ae10-f1f5725d60d1.png
-
+xm_arima <- zoo(xm_arima, order.by = data.source$Date)
 plot(xm[index(xm) >= 2010+0/12], main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)", xlab = "Années", ylab = "Séries", col = "black")
 lines(xm_arima[index(xm) >= 2010+0/12], col = "red")
 
