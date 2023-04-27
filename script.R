@@ -24,9 +24,11 @@ data <-
 
 data <- data[nrow(data):1,] #inverse les données
 data <- data.frame(data, row.names = NULL) #réinitialise l'index
-data$Date <-
-  seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month") #Convertir la colonne "date" en format date
-data.source<-data # on stock les données sources avant d'enlever les 4 dernieres valeurs
+#data$Date <-
+#  seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month") #Convertir la colonne "date" en format date
+
+data$Date <- as.yearmon(seq(from = 1990+0/12, to = 2023+1/12 , by=1/12))
+data.source <- data # on stock les données sources avant d'enlever les 4 dernieres valeurs
 
 ####representation de la série####
 
@@ -38,26 +40,22 @@ data <- data[-c((T - 1), T),]
 # Création d'une série de type zoo
 
 xm.source<-
-  zoo(data.source$value)
+  zoo(data.source$value, order.by = data$Date)
 xm <-
-  zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
+  zoo(data$value, order.by = data$Date[-c((T - 1), T)] ) # converti les premiers element de data en serie temporelle de type "zoo"
 
 
 # représentation graphique
 
-
-ggplot(data, aes(y = xm, x = Date)) +
-  geom_line()
+plot(xm)
 dxm <- diff(xm, 1)
-newDate <- data$Date[2:length(data$Date)]
-newData <- data.frame(Date = newDate, dxm = dxm)
-ggplot(newData, aes(y = dxm, x = Date)) +
-  geom_line()
+plot(dxm)
 
 
 #### Test d'integration ####
 
-summary(lm(xm ~ data$Date))
+index <- as.numeric(rownames(data))
+summary(lm(xm ~ index))
 
 #Cette regression lineaire nous permet de determiner quel type d'équation parmis les 3 possibless utiliser dans le test Dickey-Fuller 
 #Dans cette régression de la série sur le temps, seulement la constante significative
@@ -135,7 +133,7 @@ adf
 #On accepte l'hypothèse de non stationarité, on doit donc différentier la série
 #(on enlève la première date car en différenciant la série on a perdu une date) : 
 
-summary(lm(dxm ~ data$Date[-1]))
+summary(lm(dxm ~ index[-1]))
 
 #On réitère les étapes précédentes afin d'étudier la stationarité de la série différenciée
 
@@ -153,15 +151,15 @@ adf
 
 par(mfrow = c(1, 2))
 acf(dxm, 30)
-pacf(dxm, 30)
-
+pacf(dxm,30)
+dev.off()
 
 #acf-> q, pacf -> p : q=3,  p=9,
 # donc tester AR(6), MA(3),
 #and mixed ARMA models.
 #a noter que cette partie nous informe sur les ordres maximums vraissemblables
 pmax = 9
-qmax = 3
+qmax = 2
 
 #annexe : méthode TD5 AIC/BIC
 
@@ -284,7 +282,7 @@ vapply(models, FUN.VALUE = numeric(2), function(m)
 
 
 #r?cup?rer les mod?les arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
-arma53<- arima(xm,c(5,1,3),include.mean=F) 
+arma22<- arima(xm,c(2,1,2),include.mean=F) 
 arma21<- arima(xm,c(2,1,1),include.mean=F)
 adj_r2 <- function(model){ 
   p <- model$arma[1]
@@ -295,35 +293,36 @@ adj_r2 <- function(model){
   adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1))
   return(adj_r2)
 }
-adj_r2(arma53)
+adj_r2(arma22)
 adj_r2(arma21)
+
+signif(arma22)
 #je garde l'ARMA(5,3)
 #a le R2 ajust?e le plus important, il donne donc la meilleure pr?evision dans l'?echantillon. On le garde comme meilleur mod`ele au final.
 
-dev.off()
-plot(arma53$residuals)
-acf(arma53$residuals)
-pacf(arma53$residuals)
+plot(arma22$residuals)
+acf(arma22$residuals)
+pacf(arma22$residuals)
 
-hist(arma53$residuals,breaks = 50)
-checkresiduals(arma53) #une valeur abbérante pourrait être prise en compte dans la régression avec une indicatrice
+hist(arma22$residuals,breaks = 50)
+checkresiduals(arma22) #une valeur abbérante pourrait être prise en compte dans la régression avec une indicatrice
 
 #causalité
-roots <- polyroot(sort(arma53$coef[c('ar1', 'ar2', 'ar3', 'ar4', 'ar5')]))
+roots <- polyroot(sort(arma22$coef[c('ar1', 'ar2')]))
 modulus_roots <- Mod(roots)
 modulus_roots #les coefficients sont bien plus grands que 1 donc le modèle est causal
 
 #prévision
-model_pred <- predict(arma53, n.ahead=2)
+model_pred <- predict(arma22, n.ahead=2)
 serie_pred <- zoo(c(xm, model_pred$pred))
 
 #graphiques
-xm_all <- xm.source[1:T]
-xm_all <- diff(xm_all, lag = 1)
+
+dxm_all <- diff(xm.source, lag = 1)
 
 
-plot(xm_all, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série')
-lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
+plot(dxm_all, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série')
+#lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
 U = model_pred$pred + 1.96*model_pred$se
 L = model_pred$pred - 1.96*model_pred$se
 xx = c(time (U), rev (time (U)))
