@@ -6,9 +6,9 @@ library(fUnitRoots)
 library(forecast)
 library(plyr)
 
+
 ####set-up####
-#path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
-path <- "C:/Users/louis/OneDrive/Documents/Cours/Git/serie_temp"
+path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp"
 setwd(path) #definit l'espace de travail (working directory ou "wd")
 getwd() #affiche le wd
 list.files() #liste les elements du wd
@@ -18,59 +18,59 @@ list.files() #liste les elements du wd
 # data link : https://www.insee.fr/fr/statistiques/serie/010537309#Telechargement
 datafile <- "input/beer.csv" #definit le fichier de donnees
 
-data <- read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
+data <-
+  read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
 
 
 data <- data[nrow(data):1,] #inverse les données
 data <- data.frame(data, row.names = NULL) #réinitialise l'index
+#data$Date <-
+#  seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month") #Convertir la colonne "date" en format date
 
-####representation de la s�rie####
+data$Date <- as.yearmon(seq(from = 1990+0/12, to = 2023+1/12 , by=1/12))
+data.source <- data # on stock les données sources avant d'enlever les 4 dernieres valeurs
 
-# On enlève les 4 derni�re valeurs en vue de la prévision
-names(data)[names(data) == "�..Date"] <- "Date"
-data$Date <-seq(as.Date("1990-01-01"), as.Date("2023-02-01"), by = "1 month")
+####representation de la série####
+
+# On enlève les 4 dernière valeurs en vue de la prévision
+
 T <- length(data$Date)
-data.source<-data
-data <- data[-c((T - 3), (T - 2), (T - 1), T),]
+data <- data[-c((T - 1), T),]
 
-xm <- zoo(data$value) # converti les premiers element de data en serie temporelle de type "zoo"
+# Création d'une série de type zoo
 
-#T <- length(xm)
-
-#data$Date <- seq(as.Date("2023-01-01"), as.Date("1990-05-01"), by = "-1 month")
-#xm <- zoo(data$Valeur, order.by=data$Date)
+xm.source<-
+  zoo(data.source$value, order.by = data.source$Date)
+xm <-
+  zoo(data$value, order.by = data$Date[-c((T - 1), T)] ) # converti les premiers element de data en serie temporelle de type "zoo"
 
 
 # représentation graphique
 
-
-ggplot(data, aes(y = xm, x = Date)) +
-  geom_line()
+plot(xm)
 dxm <- diff(xm, 1)
-newDate <- data$Date[2:length(data$Date)]
-newData <- data.frame(Date = newDate, dxm = dxm)
-ggplot(newData, aes(y = dxm, x = Date)) +
-  geom_line()
+plot(dxm)
 
 
 #### Test d'integration ####
 
-summary(lm(xm ~ data$Date))
+index <- as.numeric(rownames(data))
+summary(lm(xm ~ index))
 
-#Cette regression lineaire nous permet de determiner quel type d'�quation parmis les 3 possibles utiliser dans le test Dickey-Fuller 
-#Dans cette r�gression de la s�rie sur le temps, la constante signif et le coefficient non significatifs
-#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante et sans tendance temporelle d�terministe
+#Cette regression lineaire nous permet de determiner quel type d'équation parmis les 3 possibless utiliser dans le test Dickey-Fuller 
+#Dans cette régression de la série sur le temps, seulement la constante significative
+#Nous utiliserons donc le test ADF, Test de racine unitaire, avec une constante 
 
 adf <- adfTest(xm, lag = 0, type = "c")
 adf
 
-#On accepte donc l'hypothese d'une racine unitaire. La série semble donc inclure une tendance comme le présageait les graphiques
-#Cependant ce test est biais� si
-#les r�sidus de la sp�cification du test ADF sont autocorr�l�s.
+#On rejecte donc l'hypothese d'une racine unitaire. La série semble donc être stationnaire
+#Cependant ce test est biaisé si
+#les résidus de la spécification du test ADF sont autocorrélés.
 #On ajoute donc des lag dans la specification du test ADF
-#pour controler l'effet du passe sur la relation entre X_t et X_t_-_1 (et X_t (r�crire la spécification complète choisie dans le latex)
-#Pour choisir le nombre de lag a incorporer dans la sp�cification test� dans le test ADF
-#On utilise la fonction Qtests (repr�ciser son fonctionnement avecc chat gpt)
+#pour controler l'effet du passe sur la relation entre X_t et X_t_-_1 (et X_t (récrire la spécification complète choisie dans le latex)
+#Pour choisir le nombre de lag a incorporer dans la sspéccification testé dans le test ADF
+#On utilise la fonction Qtests (repréciser son fonctionnement avecc chat gpt)
 
 Qtests <- function(series, k, fitdf = 0) {
   pvals <- apply(
@@ -92,7 +92,14 @@ Qtests <- function(series, k, fitdf = 0) {
 
 Qtests(adf@test$lm$residuals, 50, fitdf = length(adf@test$lm$coefficients))
 
-#les résidus sont tous autocorrélés
+#en sa basant sur les résultats de la régressions dans le test ADF précédemment exécuté, nous
+# concluons à partir de Qtests que tout les résidus sont autocorrélés. Il faut itérer ce test en 
+#changeant le nombre de lag dans le test ADF. Pour trouver le nombre de lag optimal à inclure dans le
+#test ADF, il suffit d'arrêter l'itération quand tout les p valeurs de Qtests sont supérieur à 0.05. Cela
+#signifie en effet qu'aucun résidus n'est corrélé dans la régression car il y a assez de lag dans
+#spécification pour prendre en compte l'effet du passé sur le présent. adfTest s'arrête donc quand
+#le nombre de lag permet de ne plus avoir d'autoccorrélation des résidus.
+
 
 adfTest_valid <- function(series, kmax, adftype) {
   k <- 0
@@ -116,31 +123,63 @@ adfTest_valid <- function(series, kmax, adftype) {
 
 adf <- adfTest_valid(xm, 100, adftype = "c")
 
-#en fait tout nos r�sidus sont autocorr�l�s donc pas possible de choisir le bon
-#nombre de lag car au bout d'un moment on a pluss de degr� de libert�
-#On va faire un test adf avec le plus de lag qu'on peut
+#9 lag dans la spécification du test ADF permettent de ne plus avoir de problème d'autocorrélation des résidus.
+#On peut donc analyser la p value du tesst ADF avec 9 lag et une constante pour conclure
+#a la stationarité ou non des résidus
+#adfTest_valid a en fait enregistré le dernier test, celui avec le nombre de lag optimal:
 
-summary(lm(dxm ~ data$Date[-1]))
+adf
 
-#On choisit un modèle sans trend ni constante d'après la régression
+#On accepte l'hypothèse de non stationarité, on doit donc différentier la série
+#(on enlève la première date car en différenciant la série on a perdu une date) : 
+
+summary(lm(dxm ~ index[-1]))
+
+#On réitère les étapes précédentes afin d'étudier la stationarité de la série différenciée
+
+#Ni la constante ou la tendance temporelle ne sont significatifs avec la série différenciée
+
+#On choisit donc un modèle sans trend ni constante dans notre test ADF:
 adf <- adfTest_valid(dxm, 50, "nc")
-adfTest(dxm, lags = 8, type = "nc")
-#on rejette l'ypothèse de racine unitaire --> série stationnaire en différence première
+adf
+#On rejette l'ypothèse de racine unitaire, la série est donc bien stationnaire en différence première
+
 #il faut donc travailler avec dxm
+
 
 #Partie 2 identification
 
 par(mfrow = c(1, 2))
 acf(dxm, 30)
-pacf(dxm, 30)
-
+pacf(dxm,30)
+dev.off()
 
 #acf-> q, pacf -> p : q=3,  p=9,
 # donc tester AR(6), MA(3),
 #and mixed ARMA models.
 #a noter que cette partie nous informe sur les ordres maximums vraissemblables
 pmax = 9
-qmax = 3
+qmax = 2
+
+#annexe : méthode TD5 AIC/BIC
+
+mat <- matrix(NA,nrow=pmax+1,ncol=qmax+1) #matrice vide `a remplir
+rownames(mat) <- paste0("p=",0:pmax) #renomme les lignes
+colnames(mat) <- paste0("q=",0:qmax) #renomme les colonnes
+AICs <- mat #matrice des AIC non remplie
+BICs <- mat #matrice des BIC non remplie
+pqs <- expand.grid(0:pmax,0:qmax) #toutes les combinaisons possibles de p et q
+for (row in 1:dim(pqs)[1]){ #boucle pour chaque (p,q)
+  p <- pqs[row,1] #r ́ecup`ere p
+  q <- pqs[row,2] #r ́ecup`ere q
+  estim <- try(arima(xm,c(p,1,q),include.mean = F)) #tente d’estimer l’ARIMA 
+  AICs[p+1,q+1] <- if (class(estim)=="try-error") NA else estim$aic #assigne l’AIC 
+  BICs[p+1,q+1] <- if (class(estim)=="try-error") NA else BIC(estim) #assigne le BIC
+}
+AICs
+AICs==min(AICs)
+BICs
+BICs==min(BICs)
 
 #fonction de test des significations individuelles des coefficients
 
@@ -176,7 +215,7 @@ modelchoice <- function(p, q, data = dxm, k = 24) {
   else
     signif(estim)[3, p + q] <= 0.05
   resnocorr <-
-    sum(Qtests(estim$residuals, 393, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
+    sum(Qtests(estim$residuals, 30, length(estim$coef) - 1)[, 2] <= 0.05, na.rm =
           T) == 0
   checks <- c(arsignif, masignif, resnocorr)
   ok <-
@@ -193,7 +232,9 @@ modelchoice <- function(p, q, data = dxm, k = 24) {
   )
 }
 
+
 ## fonction pour estimer et verifier tous les arima(p,q) avec p<=pmax et q<=max
+
 armamodelchoice <- function(pmax, qmax) {
   pqs <- expand.grid(0:pmax, 0:qmax)
   t(apply(matrix(1:dim(pqs)[1]), 1, function(row) {
@@ -239,8 +280,9 @@ vapply(models, FUN.VALUE = numeric(2), function(m)
 #  L'ARMA(5,3) minimise l'AIC
 # L'ARMA(2,1) minimise le BIC
 
-#r�cup�rer les mod�les arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
-arma53<- arima(xm,c(5,1,3),include.mean=F) 
+
+#r?cup?rer les mod?les arima310 arma<- arima(dxm,c(3,1,0),include.mean=F) arima choisis
+arma22<- arima(xm,c(2,1,2),include.mean=F) 
 arma21<- arima(xm,c(2,1,1),include.mean=F)
 adj_r2 <- function(model){ 
   p <- model$arma[1]
@@ -251,16 +293,46 @@ adj_r2 <- function(model){
   adj_r2 <- 1-(ss_res/(n-p-q-1))/(ss_tot/(n-1))
   return(adj_r2)
 }
-adj_r2(arma53)
+adj_r2(arma22)
 adj_r2(arma21)
+
+signif(arma22)
 #je garde l'ARMA(5,3)
-#a le R2 ajust�e le plus important, il donne donc la meilleure pr�evision dans l'�echantillon. On le garde comme meilleur mod`ele au final.
+#a le R2 ajust?e le plus important, il donne donc la meilleure pr?evision dans l'?echantillon. On le garde comme meilleur mod`ele au final.
 
-arima_pred<-data.frame(Date = seq( as.Date("1990-01-01"),as.Date("2022-10-01"), by= "1 month"))
-arima_pred$arima_pred<-rep(NA, nrow(arima_pred))
-arima_pred_new <- data.frame(Date = seq(as.Date("2022-11-01"),as.Date("2023-02-01"), by = "1 month"),
-                             arima_pred = predict(arma53, n.ahead = 4)$pred)
-arima_pred <- rbind(arima_pred, arima_pred_new)
+plot(arma22$residuals)
+acf(arma22$residuals)
+pacf(arma22$residuals)
 
-ggplot(arima_pred, aes( x = Date)) +
-  geom_line(aes(y=arima_pred), color="blue")
+hist(arma22$residuals,breaks = 50)
+checkresiduals(arma22) #une valeur abbérante pourrait être prise en compte dans la régression avec une indicatrice
+
+#causalité
+roots <- polyroot(sort(arma22$coef[c('ar1', 'ar2')]))
+modulus_roots <- Mod(roots)
+modulus_roots #les coefficients sont bien plus grands que 1 donc le modèle est causal
+
+#prévision
+model_pred <- predict(arma22, n.ahead=2)
+pred <- zoo(model_pred$pred , order.by = as.yearmon(c(2023+0/12,2023+1/12)))
+
+#serie_pred <- zoo(c(xm, model_pred$pred))
+link = rbind(xm[length(xm)],pred[1])
+
+#graphiques
+dxm.source <- diff(xm.source, 1)
+
+plot_pred <- function(start){
+  plot(xm.source, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série',xlim = c(start,2023+3/12))
+  #lines(xm_all, col = 'black', type = 'p') # pour avoir des ronds à chaque valeur de la série temporelle
+  U = model_pred$pred + 1.96*model_pred$se
+  L = model_pred$pred - 1.96*model_pred$se
+  xx = c(time (U), rev (time (U)))
+  yy = c(L, rev(U))
+  polygon(xx, yy, border = 8, col = gray (0.6, alpha=0.2))
+  lines(pred, type = "p", col = "red")
+  lines(pred, type = 'l', col = 'red') 
+  lines(link, type = 'l', col = 'red')
+  legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4)
+  }
+plot_pred(2016)
