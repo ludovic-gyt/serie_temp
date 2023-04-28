@@ -328,6 +328,8 @@ roots <- polyroot(c(1, -arima212$coef["ar1"], -arima212$coef["ar2"])) #calcul le
 modulus_roots <- Mod(roots) #récupère les modulo des racines
 modulus_roots #les coefficients sont plus grand que 1 donc le modèle est causal
 
+plot(Arima(xm,c(2,1,2))) #graphique de l'inverse des racines des polynomes AR et MA
+
 ####PREVISION####
 
 model_pred <- predict(arima212, n.ahead=2) #prédiction des deux valeurs après la dernière valeur de xm
@@ -357,19 +359,28 @@ plot_pred(2016) #graphique de la série depuis 2016 et des prédictions de janvi
 
 dev.off()
 
-arima_22 <- function(xm_1, xm_2, xm_3){
-  xm_arima <- xm_1+ (xm_1-xm_2)*arma22$coef[1]+ (xm_2-xm_3)* arma22$coef[2] #équation de l'ARIMA(2,1,2) estimé sur xm
+arima <- function(xm_1, xm_2, xm_3) {
+  xm_arima <-
+    xm_1 + (xm_1 - xm_2) * arima212$coef[1] + (xm_2 - xm_3) * arima212$coef[2] #équation de l'ARIMA(2,1,2) estimé sur xm
   return(xm_arima) #retourne la valeur prédite sachant xm_1, xm_2, xm_3
 }
 
-xm_arima<-c(NA, NA, NA)
+xm_arima <- c(NA, NA, NA)
 for (i in 4:length(xm)) {
-  xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]))
+  xm_arima[i] <-
+    arima(as.numeric(xm[i - 1]), as.numeric(xm[i - 2]), as.numeric(xm[i - 3]))
 } #calcul la prédiction sachant les valeurs passées par itération
 
-xm_arima <- zoo(xm_arima, order.by = data.source$Date) #transformation de xm_arima en objet zoo
-plot(xm[index(xm) >= 2010+0/12], main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)", xlab = "Années", ylab = "Séries", col = "black") #construction du graphique
-lines(xm_arima[index(xm) >= 2010+0/12], col = "red") #ajout de la série prédite en rouge 
+xm_arima <-
+  zoo(xm_arima, order.by = data.source$Date) #transformation de xm_arima en objet zoo
+plot(
+  xm[index(xm) >= 2010 + 0 / 12],
+  main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)",
+  xlab = "Années",
+  ylab = "Séries",
+  col = "black"
+) #construction du graphique
+lines(xm_arima[index(xm) >= 2010 + 0 / 12], col = "red") #ajout de la série prédite en rouge
 
 legend(
   "topright",
@@ -379,7 +390,4 @@ legend(
   cex = 0.4
 ) #ajout de la légende
 
-# fonction julien à tester 
 
-model <- Arima(prod,c(5,1,0))
-plot(model)
