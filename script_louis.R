@@ -341,14 +341,14 @@ plot_pred <- function(start){
 plot_pred(2020)
 signif(arma22)[1]
 
-arima_22 <- function(xm_1, xm_2, xm_3){
-  xm_arima<- xm_1+ (xm_1-xm_2)*arma22$coef[1]+ (xm_2-xm_3)* arma22$coef[2]
+arima_22 <- function(xm_1, xm_2, xm_3, xm_4, xm_5){
+  xm_arima<- xm_1+ (xm_1-xm_2)*arma22$coef[1]+ (xm_2-xm_3)* arma22$coef[2] + arma22$coef[3]*(xm_1-xm_2- (xm_2-xm_3)*arma22$coef[1]- (xm_3-xm_4)* arma22$coef[2])+ arma22$coef[4]*(xm_2-xm_3- (xm_3-xm_4)*arma22$coef[1]- (xm_4-xm_5)* arma22$coef[2]) 
   return(xm_arima)
 }
 
-xm_arima<-c(NA, NA, NA)
-for (i in 4:398) {
-  xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]))
+xm_arima<-c(NA, NA, NA, NA, NA)
+for (i in 6:398) {
+  xm_arima[i] <- arima_22(as.numeric(xm[i-1]), as.numeric(xm[i-2]), as.numeric(xm[i-3]), as.numeric(xm[i-4]), as.numeric(xm[i-5]))
 }
 
 xm_arima <- zoo(xm_arima, order.by = data.source$Date)
