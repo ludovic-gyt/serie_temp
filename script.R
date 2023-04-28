@@ -352,7 +352,7 @@ plot_pred <- function(start){
   legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4) #incorpore des légendes
   }
 
-plot_pred(2016) #graphique de la série depuis 2016 et des prédictions de janvier et février 2023
+plot_pred(2010) #graphique de la série depuis 2016 et des prédictions de janvier et février 2023
 
 # On trace également un graphique avec la série réelle et la prédiction pour chaque temporalité de 
 # la série sachant les valeurs réelles précédentes
@@ -372,7 +372,7 @@ for (i in 4:length(xm)) {
 } #calcul la prédiction sachant les valeurs passées par itération
 
 xm_arima <-
-  zoo(xm_arima, order.by = data.source$Date) #transformation de xm_arima en objet zoo
+  zoo(xm_arima, order.by = data$Date) #transformation de xm_arima en objet zoo
 plot(
   xm[index(xm) >= 2010 + 0 / 12],
   main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)",
@@ -390,4 +390,39 @@ legend(
   cex = 0.4
 ) #ajout de la légende
 
+
+# version ma
+
+arma_22 <- function(dxm_1, dxm_2, dxm_arma_1, dxm_arma_2){
+  ma_1 <- dxm_1 - dxm_arma_1 
+  ma_2 <- dxm_2 - dxm_arma_2
+  dxm_arima <- dxm_1 * arima212$coef[1]+ dxm_2 * arima212$coef[2] + ma_1 * arima212$coef[3] + ma_2 * arima212$coef[4]
+  return(dxm_arima)
+}
+
+dxm_arma<-c(0, 0)
+xm_arima<-c(NA, NA, NA)
+for (i in 3:length(dxm)) {
+  dxm_arma[i] <- arma_22(as.numeric(dxm[i-1]), as.numeric(dxm[i-2]), as.numeric(dxm_arma[i-1]), as.numeric(dxm_arma[i-2]))
+  xm_arima[i+1] <- as.numeric(dxm_arma[i]) + as.numeric(xm[i])
+  }
+
+xm_arima <-
+  zoo(xm_arima, order.by = data$Date) #transformation de xm_arima en objet zoo
+plot(
+  xm[index(xm) >= 2010 + 0 / 12],
+  main = "Comparaison de la série et des prédictions de l'ARIMA(2,1,2)",
+  xlab = "Années",
+  ylab = "Séries",
+  col = "black"
+) #construction du graphique
+lines(xm_arima[index(xm) >= 2010 + 0 / 12], col = "red") #ajout de la série prédite en rouge
+
+legend(
+  "topright",
+  legend = expression(X[t], "ARIMA(2,1,2)"),
+  col = c("black", "red"),
+  lty = 1,
+  cex = 0.4
+) #ajout de la légende
 
