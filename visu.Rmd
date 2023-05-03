@@ -1,68 +1,104 @@
-rm(list = ls()) #permet de réiniatialiser l'environnement
+---
+title: "Code du projet de série temporelles"
+author: "Ludovic Guyot & Louis Becquart"
+date: "2023-05-02"
+output:
+  html_document: default
+  pdf_document: default
+---
 
-####LIBRAIRIES####
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
+## Installation librairie
+
+
+```{r librairie, results='hide',message=FALSE}
 library(zoo) #Package permettant de formater les séries
 library(fUnitRoots) #Package pour calculer les racines d'un polynome
 library(forecast) #Package pour la prévision
+```
+
+## Paramétrage de l'environnement
 
 
-####SET-UP de l'environnement####
 
+```{r environnement, results='hide'}
 path <- "/Users/ludovic/Desktop/ENSAE/S2/series/serie_temp" #définition de l'emplacement du projet en local
 setwd(path) #définition de l'espace de travail (working directory ou "wd")
+```
 
+## Import et reraitement des données
 
-####IMPORT et RETRAITEMENT DATA####
+lien des données INSEE : https://www.insee.fr/fr/statistiques/serie/010537309#Telechargement
+```{r import}
+# définition du nom du fichier de données dans le wd
+datafile <- "input/beer.csv" 
 
-# lien des données INSEE : https://www.insee.fr/fr/statistiques/serie/010537309#Telechargement
-datafile <- "input/beer.csv" #definition du nom du fichier de données dans le wd
-
+# importe un fichier .csv dans un objet de classe data.frame
 data <-
-  read.csv(datafile, sep = ";") #importe un fichier .csv dans un objet de classe data.frame
+  read.csv(datafile, sep = ";") 
 
-data <- data[nrow(data):1,] #inverse l'ordre des données (car elles sont dans l'ordre chronologique inverse à l'import)
-data <- data.frame(data, row.names = NULL) #réinitialise l'index (car l'index peut crée des problème à cause de la commande précédente)
+# inverse l'ordre des données (car elles sont dans l'ordre chronologique inverse à l'import)
+data <- data[nrow(data):1,] 
 
-data$Date <- as.yearmon(seq(from = 1990+0/12, to = 2023+1/12 , by=1/12)) #Création d'une liste de type date adapté à l'utilisation de zoo
-data.source <- data # On stock les données sources avant d'enlever les 2 dernières valeurs 
+# réinitialise l'index (car l'index peut créé des problèmes à cause de la commande précédente)
+data <- data.frame(data, row.names = NULL) 
 
-T <- length(data$Date) # On stock la longeur de la série dans T
-data <- data[-c(T-1, T),] # On enlève les 2 dernière valeurs en vue de la prévision out-of-sample
+#Création d'une liste de type date adapté à l'utilisation de zoo
+data$Date <- as.yearmon(seq(from = 1990+0/12, to = 2023+1/12 , by=1/12)) 
 
-####CREATION des SERIES ZOO####
+# On stock les données sources avant d'enlever les 2 dernières valeurs 
+data.source <- data 
 
+# On stock la longeur de la série dans T
+T <- length(data$Date) 
+
+# On enlève les 2 dernière valeurs en vue de la prévision out-of-sample
+data <- data[-c(T-1, T),] 
+
+```
+
+## Formatage en zoo
+
+```{r zoo}
+# converti les valeurs de data.source en série temporelle de type "zoo" en les indiçant par la colonne Date
 xm.source<-
-  zoo(data.source$value, order.by = data.source$Date) # converti les valeurs de data.source en série temporelle de type "zoo" en les indiçant par la colonne Date
+  zoo(data.source$value, order.by = data.source$Date) 
+
+# converti les valeurs de data en série temporelle de type "zoo" en les indiçant par la colonne Date. xm est donc la série sans les deux dernières valeurs
 xm <-
-  zoo(data$value, order.by = data$Date) # converti les valeurs de data en série temporelle de type "zoo" en les indiçant par la colonne Date
-# xm est donc la série sans les deux dernières valeurs
+  zoo(data$value, order.by = data$Date) 
+```
 
-####REPRESENTATION GRAPHIQUE####
+## Représentation graphique de la série
 
+```{r graph}
 plot(xm) #graphique  de la série xm
 dxm <- diff(xm, 1) #création de dxm, la série xm en différence première
 plot(dxm) #graphique  de la série dxm
+```
 
+## Test de stationnarité
 
-####TEST de STATIONARITÉ####
+Nous régressons xm sur le temps afin de choisir le modèle adapté dans le test ADF :
 
+```{r reg}
 index <- as.numeric(rownames(data)) #conversion de l'index en vecteur numérique
 summary(lm(xm ~ index)) #régréssion de xm sur l'index, c'est à dire sur le temps
+```
 
-# Nous choisissons le modèle avec constante sans tendance temporelle d'après la 
-# significativité des coefficients:
+Nous choisissons le modèle avec constante sans tendance temporelle d'après la significativité des coefficients.
 
+```{r adf_0}
 adf <- adfTest(xm, lag = 0, type = "c") # Test ADF avec constante sans tendance temporelle avec 0 lag
-adf #résultat du test : on rejette l'hypothèse de non stationarité
+adf #résultat du test 
+```
 
-# La série semble donc être stationnaire.
+L'hypothèse de non stationarité est réjetée. La série semble donc être stationnaire. Cependant ce test est biaisé si les résidus de la spécification du test ADF sont autocorrélés et il faut alors ajouter des lag dans la specification du test ADF. On teste, avec la fonction Qtests, l'hypothèse de non autoccorélation des résidus avec un test Ljung-Box pour notre test ADF avec 0 lag :
 
-# Cependant ce test est biaisé si les résidus de la spécification du test ADF
-# sont autocorrélés et il faut alors ajouter des lag dans la specification du test ADF.
-# On teste, avec la fonction Qtests, l'hypothèse de non autoccorélation des résidus
-# avec un test Ljung-Box pour notre test ADF avec 0 lag :
-
+```{r Qtests}
 Qtests <- function(series, k, fitdf = 0) {
   pvals <- apply(
     matrix(1:k),
@@ -82,20 +118,14 @@ Qtests <- function(series, k, fitdf = 0) {
 }
 
 Qtests(adf@test$lm$residuals, 20, fitdf = length(adf@test$lm$coefficients)) 
+```
 
-# On inclue le paramètre 20 pour voir l'autocorrélation des résidus sur les 20 premiers lags. 
-# Les deux premiers ne sont pas calculés car il y a 2 degrés de liberté en moins à 
-# cause du nombre de coefficients de la spécification du test ADF.
+On inclue le paramètre 20 pour voir l'autocorrélation des résidus sur les 20 premiers lags. Les deux premiers ne sont pas calculés car il y a 2 degrés de liberté en moins à cause du nombre de coefficients de la spécification du test ADF.
 
-# Tous les résidus du test ADF avec 0 lag sont autocorrélés. Il faut ajouter des lags.
+Tous les résidus du test ADF avec 0 lag sont autocorrélés. Il faut ajouter des lags. 
 
-# Pour trouver le nombre de lag optimal à inclure dans le test ADF, il faut itérer 
-# ce test en changeant le nombre de lag du test ADF. Il suffit d'arrêter l'itération quand 
-# toutes les p valeurs de Qtests sont supérieur à 0.05. Cela signifie en effet qu'aucun 
-# résidus n'est corrélé dans la régression car il y a assez de lag dans spécification 
-# pour prendre en compte l'effet du passé sur le présent. 
-
-
+Pour trouver le nombre de lag optimal à inclure dans le test ADF, il faut itérer ce test en changeant le nombre de lag du test ADF. Il suffit d'arrêter l'itération quand toutes les p valeurs de Qtests sont supérieur à 0.05. Cela signifie en effet qu'aucun résidus n'est corrélé dans la régression car il y a assez de lag dans spécification pour prendre en compte l'effet du passé sur le présent. 
+```{r adfTest_valid}
 adfTest_valid <- function(series, kmax, adftype) {
   k <- 0
   noautocorr <- 0
@@ -118,52 +148,48 @@ adfTest_valid <- function(series, kmax, adftype) {
 
 adf <- adfTest_valid(xm, 20, adftype = "c") # On exécute adfTest_valid sur xm avec le paramètre 20 pour Q test et toujours un modèle avec constante sans tendance temporelle
 
-# Le nombre de lag optimal a inclure dans la spécification du test ADF est 9
-# En effet avec 9 lags il n'y a plus de problème d'autocorrélation des résidus.
-# On peut donc analyser la p value du test ADF avec 9 lag et une constante pour conclure
-# a la stationarité ou non de la série. 
-# adfTest_valid a en fait enregistré le dernier test réalisé, celui avec le nombre
-# de lag optimal:
+```
 
+Le nombre de lag optimal a inclure dans la spécification du test ADF est 9. En effet avec 9 lags il n'y a plus de problème d'autocorrélation des résidus. On peut donc analyser la p value du test ADF avec 9 lag et une constante pour conclure a la stationarité ou non de la série. adfTest_valid a en fait enregistré le dernier test réalisé, i.e celui avec le nombre de lag optimal:
+
+```{r adf_opt}
 adf
+```
 
-# On accepte l'hypothèse de non stationarité. On doit donc différencier la série.
-# On réitère la procédure pour s'assurer que la série différenciée est statioinnaire (on 
-# enlève le premier élément d'index car en différenciant la série on a perdu une date) : 
+On accepte l'hypothèse de non stationarité. On doit donc différencier la série. On réitère la procédure pour s'assurer que la série différenciée est statioinnaire (on enlève le premier élément d'index car en différenciant la série on a perdu une date) : 
 
+```{r reg_dif}
 summary(lm(dxm ~ index[-1]))
+```
 
-# Ni la constante ou la tendance temporelle ne sont significatifs dans cette régression.
-# On choisit donc un modèle sans trend ni constante dans notre test ADF :
+Ni la constante ou la tendance temporelle ne sont significatifs dans cette régression. On choisit donc un modèle sans trend ni constante dans notre test ADF :
 
+```{r adfTest_valid_dif}
 adf <- adfTest_valid(dxm, 50, "nc")
 adf
+```
 
-# On rejette l'hypothèse de racine unitaire avec 8 lags.
-# La série est donc bien stationnaire en différence première.
-# Il faut donc travailler avec la série dxm
+On rejette l'hypothèse de racine unitaire avec 8 lags. La série est donc bien stationnaire en différence première. Il faut donc travailler avec la série dxm.
 
+## Modélisation
 
-####MODÉLISATION####
+Afin de déterminer les ordres maximums vraissemblables de p et q, nous construisons les graphiques d'ACF et PACF :
 
-# Afin de déterminer les ordres maximums vraissemblables de p et q, nous construisons
-# les graphiques d'ACF et PACF
-
+```{r acf_pacf}
 par(mfrow = c(1, 2))
 acf(dxm, 30)
 pacf(dxm,30)
+```
 
-# La fonction d'autocorrélation partielle est significative jusqu'à l'ordre 9.
-# La fonction d'autocorrélation est significative jusqu'à l'ordre 2.
-
+La fonction d'autocorrélation partielle est significative jusqu'à l'ordre 9. La fonction d'autocorrélation est significative jusqu'à l'ordre 2.
+```{r max_lag}
 pmax = 9
 qmax = 2
+```
 
-# Il s'agit maintenant de sélectioner le meilleur modèle ARIMA(p,1,q) avec p
-# et q entre 0 et respectivement pmax et qmax.
+Il s'agit maintenant de sélectioner le meilleur modèle ARIMA(p,1,q) avec p et q entre 0 et respectivement pmax et qmax. Pour cela on construit une matrice affichant le critère AIC et BIC de chaque modèle et on choisit les modèles qui minimisent chaque critère : 
 
-# Pour cela on construit une matrice affichant le critère AIC et BIC de chaque modèle : 
-
+```{r mat_ABIC}
 mat <- matrix(NA,nrow=pmax+1,ncol=qmax+1) #matrice vide à remplir
 rownames(mat) <- paste0("p=",0:pmax) #renomme les lignes
 colnames(mat) <- paste0("q=",0:qmax) #renomme les colonnes
@@ -179,15 +205,15 @@ for (row in 1:dim(pqs)[1]){ #boucle pour chaque (p,q)
 }
 AICs==min(AICs) #cherche le modèle minimisant le critère AIC
 BICs==min(BICs) #cherche le modèle minimisant le critère BIC
+```
 
-# Les modèles ARIMA(3,1,2) et ARIMA(0,1,2) minimisent respectivement le AIC et le BIC.
+Les modèles ARIMA(3,1,2) et ARIMA(0,1,2) minimisent respectivement le AIC et le BIC. Cependant, nous allons réaliser une étude plus approfondie pour déterminer le meilleur modèle. Nous allons notamment déterminer la significativité des coefficient des AR et des MA, et analyser l'autoccorélatoin des résidus de chaque modèle. 
 
-# Cependant, nous allons réaliser une étude plus poussée pour déterminer le meilleur modèle. Nous
-# allons notamment déterminer la significativité des coefficient des AR et des MA, et analyser
-# l'autoccorélation des résidus de chaque modèle.
+Pour ce faire nous allons définir des fonctions utiles.
 
-# Cette fonction permet de calculer la p_value des coefficients d'un modèle ARMA donné :
+La fonction permet de calculer la p_value des coefficients d'un modèle ARMA donné :
 
+```{r fct_signif}
 signif <-
   function(estim) {
     coef <- estim$coef #extrait chaque coefficient
@@ -196,8 +222,11 @@ signif <-
     pval <- (1 - pnorm(abs(t))) * 2 #calcul la p_value de chaque coefficient
     return(rbind(coef, se, pval))
   }
+```
 
-# La fonction suivante estime un arima et verifie l'ajustement et la validité du modèle grâce à signif :
+La fonction suivante estime un arima et verifie l'ajustement et la validité du modèle grâce à signif :
+
+```{r fct_modelchoice}
 
 modelchoice <- function(p, q, data = dxm, k = 24) {
   estim <-
@@ -236,10 +265,11 @@ modelchoice <- function(p, q, data = dxm, k = 24) {
     )
   )
 }
+```
 
+La fonction armamodelchoice estime et éxécute modelchoice sur tous les arima(p,q) avec p<=pmax et q<=max
 
-## La fonction armamodelchoice estime et éxécute modelchoice sur tous les arima(p,q) avec p<=pmax et q<=max
-
+```{r fct_armamodelchoice}
 armamodelchoice <- function(pmax, qmax) {
   pqs <- expand.grid(0:pmax, 0:qmax) #crréation de la grille de p et q
   t(apply(matrix(1:dim(pqs)[1]), 1, function(row) { #itération sur la grille
@@ -249,28 +279,30 @@ armamodelchoice <- function(pmax, qmax) {
     modelchoice(p, q) #éxécute la fonction modelchoice sur le modèle (p,q)
   }))
 }
+```
 
+On éxécute cette dernière fonction avec pmax et qmax définis précédemment :
+
+```{r analyse_modeles}
 armamodels <- armamodelchoice(pmax, qmax) 
 armamodels
+```
 
-# Il s'agit de sélectionner uniquement les modèles ou la colonne "ok" est égale à 1, c'est à dire
-# où les coefficients de l'AR et du MA, avec les ordres de retard les plus important, sont significatifs
-# et où les résidus ne sont pas autocorrélés : 
+Il s'agit maintenant de sélectionner uniquement les modèles ou la colonne "ok" est égale à 1, c'est à dire où les coefficients de l'AR et du MA, avec les ordres de retard les plus important, sont significatifs et où les résidus ne sont pas autocorrélés : 
 
+```{r selection}
 selec <-
   armamodels[armamodels[, "ok"] == 1 &
                !is.na(armamodels[, "ok"]),] 
 
 selec 
+```
 
-# On retient seulement 3 modèles avec cette méthode, les modèles ARIMA(9,1,0), ARIMA(2,1,1) et ARIMA(2,1,2)
-# Les modèles ARIMA(3,1,2) et ARIMA(0,1,2), qui minimisaient respectivement le AIC et le BIC, ne sont
-# pas retenu avec cette méthode car le coefficient de l'AR le plus laggé n'est pas significatif et donc il faut passer
-# au modèle ARIMA(2,1,2), que l'on a retenu. Quant à ARIMA(0,1,2) les résidus sont autocorrélés.
+On retient seulement 3 modèles avec cette méthode, les modèles ARIMA(9,1,0), ARIMA(2,1,1) et ARIMA(2,1,2). Les modèles ARIMA(3,1,2) et ARIMA(0,1,2), qui minimisaient respectivement le AIC et le BIC, ne sont pas retenu avec cette méthode car le coefficient de l'AR le plus laggé n'est pas significatif et donc il faut passer au modèle ARIMA(2,1,2), que l'on a retenu. Quant à ARIMA(0,1,2) les résidus sont autocorrélés.
 
-# Il faut maintenant choisir le meilleur de ces 3 modèles. On utilise alors la méthode de minimisation des critères
-# AIC et BIC sur ces 3 modèles :
+Il faut maintenant choisir le meilleur de ces 3 modèles. On utilise alors la méthode de minimisation des critères AIC et BIC sur ces 3 modèles :
 
+```{r min_ABIC}
 pqs <-
   apply(selec, 1, function(row)
     list("p" = as.numeric(row[1]), "q" = as.numeric(row[2]))) #crée une liste des ordres p et q des modeles candidats
@@ -281,18 +313,21 @@ models <-
     arima(dxm, c(pq[["p"]], 0, pq[["q"]]))) #crée une liste des estimations des modèles candidats
 vapply(models, FUN.VALUE = numeric(2), function(m)
   c("AIC" = AIC(m), "BIC" = BIC(m))) #calcule les AIC et BIC des modèles candidats
+```
 
-# L'ARMA(2,2) minimise l'AIC
-# L'ARMA(2,1) minimise le BIC
-# Le BIC pénalise les modèles avec de grands ordre de retards
+ARMA(2,2) minimise l'AIC et ARMA(2,1) minimise le BIC. Le BIC pénalise en effet les modèles avec de grands ordre de retards
 
+On récupère maintenant l'estimation de chacun de ces 2 modèles :
 
-# On récupère maintenant l'estimation de chacun de ces 2 modèles :
+```{r modele_retenus}
+arima212 <- arima(xm,c(2,1,2),include.mean=F) 
+arima211 <- arima(xm,c(2,1,1),include.mean=F)
+```
 
-arima212<- arima(xm,c(2,1,2),include.mean=F) 
-arima211<- arima(xm,c(2,1,1),include.mean=F)
+On définit une fonction qui calcule le R2 ajusté de chaque modèle :
 
-# On définit une fonction qui calcule le R2 ajusté de chaque modèle
+```{r }
+
 adj_r2 <- function(model){ 
   p <- model$arma[1] #récupère le paramètre p du modèle
   q <- model$arma[2] #récupère le paramètre q du modèle
@@ -305,39 +340,46 @@ adj_r2 <- function(model){
 adj_r2(arima212) #calcule le R2 ajusté d'un arima212
 adj_r2(arima211) #calcule le R2 ajusté d'un arima211
 
-# On garde le modèleavec le R2 le plus faible, c'est à dire ARIMA(2,1,2)
-# Il donne donc la meilleur prédiction
+```
 
+On garde le modèleavec le R2 le plus faible, c'est à dire ARIMA(2,1,2). Il donne donc la meilleur prédiction
 
-####ÉTUDE DU MODÈLE CHOISI####
+## Étude du modèle choisi
 
-# On peut étudier ce modèle plus en détail :
+On peut étudier ce modèle plus en détail :
+
+```{r signif_arima212}
 signif(arima212)
-# Tous les coefficients sont significatifs dans ce modèle 
+```
 
-# On peut vérifier également graphiquement la qualité de nos résidus : 
+Tous les coefficients sont significatifs dans ce modèle.
 
+On peut vérifier également graphiquement la qualité de nos résidus : 
+
+```{r checkresiduals}
 checkresiduals(arima212) 
+```
 
-# Les résidus suivent une loi normale et sont bien décorrélés d'après ces graphiques
-# Une valeur abbérante est présente, on pourrait la prendre en compte dans la régression avec une indicatrice
+On étudie maintenant la causalité du modèle :
 
-# On étudie maintenant la causalité du modèle :
-
+```{r }
 roots <- polyroot(c(1, -arima212$coef["ar1"], -arima212$coef["ar2"])) #calcul les racines du polynome 1-0.1543469x+0.1338976x^2
 modulus_roots <- Mod(roots) #récupère les modulo des racines
 modulus_roots #les coefficients sont plus grand que 1 donc le modèle est causal
 
 plot(Arima(xm,c(2,1,2))) #graphique de l'inverse des racines des polynomes AR et MA
+```
 
-####PREVISION####
+## Prévision
 
+```{r prediction}
 model_pred <- predict(arima212, n.ahead=2) #prédiction des deux valeurs après la dernière valeur de xm
 pred <- zoo(model_pred$pred , order.by = as.yearmon(c(2023+0/12,2023+1/12))) #stock ces 2 valeurs dans un objet zoo indicé par des dates
+```
 
-# On crée une fonction qui permet de construire un graphique de la série depuis une date x
-# et des prédictions de janvier et février 2023
+On crée une fonction qui permet de construire un graphique de la série depuis une date x et des prédictions de janvier et février 2023 : 
 
+```{r fct_graph_pred}
 plot_pred <- function(start){
   plot(xm.source, col = 'black', ylab = 'Série', main = 'Prévision des 2 prochaines valeurs de la série',xlim = c(start,2023+3/12)) #plot la série xm.source
   U = model_pred$pred + 1.96*model_pred$se #calcul la borne supérieure de l'intervalle de confiance
@@ -350,13 +392,23 @@ plot_pred <- function(start){
   link = rbind(xm[length(xm)],pred[1]) #stock un vecteur avec la dernière valeur avant prédiction et la première valeur prédite
   lines(link, type = 'l', col = 'red') # trace une ligne entre la dernière valeur avant prédiction et la première valeur prédite
   legend("topleft", legend=c("Données réelles", "Prédiction"), col=c("red", "black"), lty=1:2, cex=0.4) #incorpore des légendes
-  }
-dev.off()
-plot_pred(2010) #graphique de la série depuis 2016 et des prédictions de janvier et février 2023
+}
 
-# On trace également un graphique avec la série réelle et la prédiction pour chaque temporalité de 
-# la série sachant les valeurs réelles précédentes
+```
 
+On trace le graphique uniquement depuis 2020 pour mieux voir ce qu'il se passe en prédiction : 
+
+```{r graph_pred}
+
+
+plot_pred(2020) #graphique de la série depuis 2020 et des prédictions de janvier et février 2023
+```
+
+
+On trace également un graphique avec la série réelle et la prédiction pour chaque période de la série sachant les valeurs réelles précédentes :
+
+
+```{r comparaison_series}
 arma_22 <- function(dxm_1, dxm_2, dxm_arma_1, dxm_arma_2){
   ma_1 <- dxm_1 - dxm_arma_1 
   ma_2 <- dxm_2 - dxm_arma_2
@@ -389,9 +441,13 @@ legend(
   lty = 1,
   cex = 0.4
 ) #ajout de la légende
+```
 
-# Autre méthode
+On voit que la modèlisation a du mal a prédire des chocs moyen et a donc tendance à lisser la série.
 
+On a également testé avec une autre méthode qui récupère les valeurs prédites sans reconstruire le modèle : 
+
+```{r }
 resid <- residuals(arima212) #obtention des résidus de l'estimation
 
 fitted <- data$value - resid #obtention des valeurs prédites
@@ -414,3 +470,4 @@ legend(
   lty = 1,
   cex = 0.4
 ) 
+```
