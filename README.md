@@ -27,5 +27,5 @@ This GitHub repository contains the following components :
 - Report in PDF format (time_series_analysis.pdf).
 - R script used for analysis (input/analysis.R).
 - Explanations of the R code in Markdown format.
-  - [HTML rendering of code explanations](./code_md.html)
+  - [HTML rendering of code explanations](./code_explanation/code_md.html)
   - [PDF rendering of code explanations](./code_md.pdf)
