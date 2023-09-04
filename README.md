@@ -28,4 +28,4 @@ This GitHub repository contains the following components :
 - R script used for analysis (input/analysis.R).
 - Explanations of the R code in Markdown format.
   - [HTML rendering of code explanations](./code_explanation/code_md.html)
-  - [PDF rendering of code explanations](./code_md.pdf)
+  - [PDF rendering of code explanations](./code_explanation/code_md.pdf)
